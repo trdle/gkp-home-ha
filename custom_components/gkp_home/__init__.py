@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from functools import partial
 import logging
 
@@ -52,7 +53,7 @@ def create_api(
     apim_key: str,
     *,
     refresh_token: str | None = None,
-    token_listener: callable | None = None,
+    token_listener: Callable[[TokenSet], None] | None = None,
 ) -> GkpHomeApi:
     """Create a cloud client that uses Home Assistant's aiohttp sessions."""
     return GkpHomeApi(
