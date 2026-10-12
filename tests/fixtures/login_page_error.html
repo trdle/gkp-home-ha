@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>GKP Home - Login</title>
+</head>
+<body>
+<div class="login-page">
+  <div class="alert alert-danger validation-summary-errors" data-valmsg-summary="true"><ul><li>Invalid username or password</li></ul></div>
+  <form method="post" action="/Account/Login?ReturnUrl=%2Fconnect%2Fauthorize%2Fcallback%3Fclient_id%3D835295d3-75c5-470c-82e1-9919f74c00c2">
+    <input type="hidden" id="ReturnUrl" name="ReturnUrl" value="/connect/authorize/callback?client_id=835295d3-75c5-470c-82e1-9919f74c00c2" />
+    <input class="form-control" type="text" id="Username" name="Username" value="user@example.com" />
+    <input type="password" class="form-control" id="Password" name="Password" />
+    <button class="btn btn-primary" name="button" value="login">Login</button>
+    <input name="__RequestVerificationToken" type="hidden" value="CfDJ8dummyAntiForgeryToken" />
+  </form>
+</div>
+</body>
+</html>

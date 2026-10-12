@@ -1,0 +1,107 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Logga in på GKP Home",
+        "description": "Logga in med ditt GKP Home-konto. Klienthemligheten och prenumerationsnyckeln är de värden som GKP Home-appen använder mot molnet; den här integrationen levererar dem inte. Ditt lösenord används en gång för att logga in och sparas inte.",
+        "data": {
+          "email": "E-post",
+          "password": "Lösenord",
+          "client_secret": "Klienthemlighet",
+          "apim_key": "Prenumerationsnyckel"
+        },
+        "data_description": {
+          "email": "E-postadressen till ditt GKP Home-konto.",
+          "password": "Ditt lösenord för GKP Home. Det används bara för att logga in och sparas inte.",
+          "client_secret": "OAuth-klienthemligheten som är inbyggd i GKP Home-appen.",
+          "apim_key": "API-prenumerationsnyckeln (Ocp-Apim-Subscription-Key) som är inbyggd i GKP Home-appen."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Logga in på GKP Home igen",
+        "description": "Den sparade sessionen för {email} är inte längre giltig. Ange ditt lösenord för att logga in igen.",
+        "data": {
+          "password": "Lösenord"
+        },
+        "data_description": {
+          "password": "Ditt lösenord för GKP Home. Det används bara för att logga in och sparas inte."
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ogiltig inloggning. Kontrollera e-post, lösenord, klienthemlighet och prenumerationsnyckel.",
+      "cannot_connect": "Det gick inte att ansluta till GKP Home-molnet.",
+      "unknown": "Oväntat fel."
+    },
+    "abort": {
+      "already_configured": "Det här GKP Home-kontot är redan konfigurerat.",
+      "reauth_successful": "Återautentiseringen lyckades.",
+      "unique_id_mismatch": "Kontot du loggade in på är inte samma konto som den här posten skapades med."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Alternativ för GKP Home",
+        "data": {
+          "poll_interval": "Uppdateringsintervall"
+        },
+        "data_description": {
+          "poll_interval": "Hur ofta elementen läses från molnet, i sekunder (minst 30)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "radiator": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "comfort": "Komfort",
+              "eco": "Eko",
+              "frost_protection": "Frostskydd",
+              "boost": "Boost"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "rated_power": {
+        "name": "Märkeffekt"
+      },
+      "firmware": {
+        "name": "Firmware"
+      },
+      "last_report": {
+        "name": "Senaste rapport"
+      },
+      "eco_setpoint": {
+        "name": "Börvärde eko"
+      },
+      "comfort_setpoint": {
+        "name": "Börvärde komfort"
+      },
+      "frost_setpoint": {
+        "name": "Börvärde frostskydd"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      },
+      "heating": {
+        "name": "Värmer"
+      }
+    }
+  },
+  "exceptions": {
+    "write_failed": {
+      "message": "Kommandot kunde inte skickas till elementet: {error}"
+    },
+    "auth_failed": {
+      "message": "GKP Home avvisade den sparade sessionen. Logga in igen från integrationssidan."
+    }
+  }
+}
