@@ -56,6 +56,7 @@ ignore = [
     "TRY003",  # long messages outside exception class
     "TRY300",  # consider moving statement to else block
     "RUF012",  # mutable class attributes (HA entity descriptions)
+    "N818",    # exception names follow Home Assistant conventions (InvalidAuth, CannotConnect)
 ]
 
 [tool.ruff.lint.per-file-ignores]

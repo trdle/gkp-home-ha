@@ -36,9 +36,9 @@ USER_AGENT_WEBVIEW: Final = (
 X_REQUESTED_WITH: Final = "com.watts.gkp.mobile.prd"
 
 # Config entry data / options keys
-CONF_CLIENT_SECRET: Final = "client_secret"
+CONF_CLIENT_SECRET: Final = "client_secret"  # noqa: S105 - config key name
 CONF_APIM_KEY: Final = "apim_key"
-CONF_REFRESH_TOKEN: Final = "refresh_token"
+CONF_REFRESH_TOKEN: Final = "refresh_token"  # noqa: S105 - config key name
 CONF_SUB: Final = "sub"
 CONF_POLL_INTERVAL: Final = "poll_interval"
 

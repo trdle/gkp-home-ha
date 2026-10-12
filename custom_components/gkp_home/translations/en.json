@@ -1,0 +1,107 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to GKP Home",
+        "description": "Sign in with your GKP Home account. The client secret and subscription key are the values the GKP Home app uses to talk to the cloud; this integration does not ship them. Your password is used once to sign in and is not stored.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "client_secret": "Client secret",
+          "apim_key": "Subscription key"
+        },
+        "data_description": {
+          "email": "The email address of your GKP Home account.",
+          "password": "Your GKP Home password. It is only used to sign in and is not stored.",
+          "client_secret": "The OAuth client secret embedded in the GKP Home app.",
+          "apim_key": "The API subscription key (Ocp-Apim-Subscription-Key) embedded in the GKP Home app."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in to GKP Home again",
+        "description": "The saved session for {email} is no longer valid. Enter your password to sign in again.",
+        "data": {
+          "password": "Password"
+        },
+        "data_description": {
+          "password": "Your GKP Home password. It is only used to sign in and is not stored."
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid authentication. Check the email, password, client secret and subscription key.",
+      "cannot_connect": "Failed to connect to the GKP Home cloud.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This GKP Home account is already configured.",
+      "reauth_successful": "Re-authentication was successful.",
+      "unique_id_mismatch": "The account you signed in to is not the account this entry was created with."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "GKP Home options",
+        "data": {
+          "poll_interval": "Poll interval"
+        },
+        "data_description": {
+          "poll_interval": "How often the radiators are read from the cloud, in seconds (minimum 30)."
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "radiator": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "comfort": "Comfort",
+              "eco": "Eco",
+              "frost_protection": "Frost protection",
+              "boost": "Boost"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "rated_power": {
+        "name": "Rated power"
+      },
+      "firmware": {
+        "name": "Firmware"
+      },
+      "last_report": {
+        "name": "Last report"
+      },
+      "eco_setpoint": {
+        "name": "Eco setpoint"
+      },
+      "comfort_setpoint": {
+        "name": "Comfort setpoint"
+      },
+      "frost_setpoint": {
+        "name": "Frost protection setpoint"
+      }
+    },
+    "binary_sensor": {
+      "online": {
+        "name": "Online"
+      },
+      "heating": {
+        "name": "Heating"
+      }
+    }
+  },
+  "exceptions": {
+    "write_failed": {
+      "message": "Could not send the command to the radiator: {error}"
+    },
+    "auth_failed": {
+      "message": "GKP Home rejected the saved session. Sign in again from the integration page."
+    }
+  }
+}
