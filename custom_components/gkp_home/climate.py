@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.climate import (
     ATTR_HVAC_MODE,
+    DOMAIN as CLIMATE_DOMAIN,
     PRESET_BOOST,
     PRESET_COMFORT,
     PRESET_ECO,
@@ -103,7 +104,7 @@ class GkpHomeClimate(GkpHomeEntity, ClimateEntity):
 
     def __init__(self, coordinator: GkpHomeCoordinator, device_id: str) -> None:
         """Initialize the climate entity."""
-        super().__init__(coordinator, device_id)
+        super().__init__(coordinator, device_id, CLIMATE_DOMAIN)
         self._attr_unique_id = device_id
 
     @property

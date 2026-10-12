@@ -52,6 +52,7 @@ ignore = [
     "D213",    # multi-line-summary-second-line (conflicts with D212)
     "E501",    # line length is handled by the formatter
     "PLR0913", # too many arguments
+    "PLR0917", # too many positional arguments
     "PLR2004", # magic value comparison
     "TRY003",  # long messages outside exception class
     "TRY300",  # consider moving statement to else block
@@ -64,6 +65,7 @@ ignore = [
     "S101",    # use of assert
     "S105",    # hardcoded password strings (dummy test values)
     "S106",    # hardcoded password arguments (dummy test values)
+    "S107",    # hardcoded password defaults (dummy test values)
     "SLF001",  # private member access
     "PLR0915", # too many statements
     "D",       # docstrings are optional in tests

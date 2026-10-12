@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
 from .const import DOMAIN, MANUFACTURER
 from .coordinator import GkpHomeCoordinator, Radiator
@@ -15,11 +16,27 @@ class GkpHomeEntity(CoordinatorEntity[GkpHomeCoordinator]):
 
     _attr_has_entity_name = True
 
-    def __init__(self, coordinator: GkpHomeCoordinator, device_id: str) -> None:
-        """Initialize the entity and its device."""
+    def __init__(
+        self,
+        coordinator: GkpHomeCoordinator,
+        device_id: str,
+        domain: str,
+        key: str | None = None,
+    ) -> None:
+        """Initialize the entity and its device.
+
+        The entity id is suggested from the room name (``climate.kitchen``,
+        ``sensor.kitchen_rated_power``) so it stays short and predictable even
+        when Home Assistant would otherwise prefix it with the area name, which
+        equals the device name here. Home Assistant still makes it unique.
+        """
         super().__init__(coordinator)
         self._device_id = device_id
         radiator = coordinator.data.radiators[device_id]
+        object_id = slugify(radiator.room_name) or slugify(device_id)
+        self.entity_id = (
+            f"{domain}.{object_id}_{key}" if key else f"{domain}.{object_id}"
+        )
         device_info = DeviceInfo(
             identifiers={(DOMAIN, device_id)},
             manufacturer=MANUFACTURER,
