@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from homeassistant.components.sensor import (
+    DOMAIN as SENSOR_DOMAIN,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
@@ -109,7 +110,7 @@ class GkpHomeSensor(GkpHomeEntity, SensorEntity):
         description: GkpHomeSensorDescription,
     ) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator, device_id)
+        super().__init__(coordinator, device_id, SENSOR_DOMAIN, description.key)
         self.entity_description = description
         self._attr_unique_id = f"{device_id}_{description.key}"
 

@@ -79,7 +79,7 @@ def make_jwt(claims: dict[str, Any]) -> str:
 def token_response(
     *,
     sub: str = SUB,
-    refresh_token: str | None = "refresh-token-1",  # noqa: S107 - dummy value
+    refresh_token: str | None = "refresh-token-1",
     exp: int | None = None,
     jti: str = "jti-1",
 ) -> dict[str, Any]:

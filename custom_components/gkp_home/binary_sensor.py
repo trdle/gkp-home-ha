@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from homeassistant.components.binary_sensor import (
+    DOMAIN as BINARY_SENSOR_DOMAIN,
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
@@ -73,7 +74,7 @@ class GkpHomeBinarySensor(GkpHomeEntity, BinarySensorEntity):
         description: GkpHomeBinarySensorDescription,
     ) -> None:
         """Initialize the binary sensor."""
-        super().__init__(coordinator, device_id)
+        super().__init__(coordinator, device_id, BINARY_SENSOR_DOMAIN, description.key)
         self.entity_description = description
         self._attr_unique_id = f"{device_id}_{description.key}"
 
