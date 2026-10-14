@@ -14,6 +14,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.data_entry_flow import section
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -24,7 +25,7 @@ from homeassistant.helpers.selector import (
 )
 import voluptuous as vol
 
-from . import create_api
+from . import create_api, resolve_app_credentials
 from .api import ApiError, CannotConnect, InvalidAuth, TokenSet
 from .const import (
     CONF_APIM_KEY,
@@ -39,30 +40,46 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-PASSWORD_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
-STEP_USER_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_EMAIL): TextSelector(
-            TextSelectorConfig(type=TextSelectorType.EMAIL, autocomplete="username")
-        ),
-        vol.Required(CONF_PASSWORD): TextSelector(
-            TextSelectorConfig(
-                type=TextSelectorType.PASSWORD, autocomplete="current-password"
-            )
-        ),
-        vol.Required(CONF_CLIENT_SECRET): PASSWORD_SELECTOR,
-        vol.Required(CONF_APIM_KEY): PASSWORD_SELECTOR,
-    }
+SECTION_CREDENTIALS = "api_credentials"
+CREDENTIAL_KEYS = (CONF_CLIENT_SECRET, CONF_APIM_KEY)
+EMAIL_SELECTOR = TextSelector(
+    TextSelectorConfig(type=TextSelectorType.EMAIL, autocomplete="username")
 )
-STEP_REAUTH_SCHEMA = vol.Schema(
-    {
-        vol.Required(CONF_PASSWORD): TextSelector(
-            TextSelectorConfig(
-                type=TextSelectorType.PASSWORD, autocomplete="current-password"
-            )
-        ),
-    }
+PASSWORD_SELECTOR = TextSelector(
+    TextSelectorConfig(type=TextSelectorType.PASSWORD, autocomplete="current-password")
 )
+CREDENTIAL_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+
+
+def _credential_section(*, available: bool) -> dict[vol.Marker, Any]:
+    """Return the collapsible section holding the app's API credentials.
+
+    Optional and collapsed while credentials are available (built into this
+    release, or stored in the entry), so they can still be overridden; required
+    and expanded when nothing is available at all.
+    """
+    marker = vol.Optional if available else vol.Required
+    fields = {marker(key): CREDENTIAL_SELECTOR for key in CREDENTIAL_KEYS}
+    return {
+        marker(SECTION_CREDENTIALS): section(
+            vol.Schema(fields), {"collapsed": available}
+        )
+    }
+
+
+def _credential_overrides(user_input: Mapping[str, Any]) -> dict[str, str]:
+    """Return the credentials the user typed, without empty values."""
+    values = user_input.get(SECTION_CREDENTIALS) or {}
+    return {
+        key: value
+        for key in CREDENTIAL_KEYS
+        if (value := str(values.get(key) or "").strip())
+    }
+
+
+def _credentials_available(data: Mapping[str, Any]) -> bool:
+    """Return True if both API credentials can be resolved for the data."""
+    return all(resolve_app_credentials(data))
 
 
 async def _async_sign_in(
@@ -84,17 +101,15 @@ class GkpHomeConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask for the account and the app's API credentials."""
+        """Ask for the account, and for the app's API credentials when needed."""
         errors: dict[str, str] = {}
         if user_input is not None:
             email = user_input[CONF_EMAIL].strip()
+            overrides = _credential_overrides(user_input)
+            client_secret, apim_key = resolve_app_credentials(overrides)
             try:
                 token = await _async_sign_in(
-                    self.hass,
-                    email,
-                    user_input[CONF_PASSWORD],
-                    user_input[CONF_CLIENT_SECRET].strip(),
-                    user_input[CONF_APIM_KEY].strip(),
+                    self.hass, email, user_input[CONF_PASSWORD], client_secret, apim_key
                 )
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
@@ -116,15 +131,20 @@ class GkpHomeConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_EMAIL: email,
                         CONF_SUB: token.sub,
                         CONF_REFRESH_TOKEN: token.refresh_token,
-                        CONF_CLIENT_SECRET: user_input[CONF_CLIENT_SECRET].strip(),
-                        CONF_APIM_KEY: user_input[CONF_APIM_KEY].strip(),
+                        **overrides,
                     },
                 )
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_EMAIL): EMAIL_SELECTOR,
+                vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR,
+                **_credential_section(available=_credentials_available({})),
+            }
+        )
         return self.async_show_form(
             step_id="user",
             data_schema=self.add_suggested_values_to_schema(
-                STEP_USER_SCHEMA,
-                {CONF_EMAIL: user_input.get(CONF_EMAIL)} if user_input else None,
+                schema, {CONF_EMAIL: user_input.get(CONF_EMAIL)} if user_input else None
             ),
             errors=errors,
         )
@@ -142,13 +162,17 @@ class GkpHomeConfigFlow(ConfigFlow, domain=DOMAIN):
         entry = self._get_reauth_entry()
         errors: dict[str, str] = {}
         if user_input is not None:
+            overrides = _credential_overrides(user_input)
+            client_secret, apim_key = resolve_app_credentials(
+                {**entry.data, **overrides}
+            )
             try:
                 token = await _async_sign_in(
                     self.hass,
                     entry.data[CONF_EMAIL],
                     user_input[CONF_PASSWORD],
-                    entry.data[CONF_CLIENT_SECRET],
-                    entry.data[CONF_APIM_KEY],
+                    client_secret,
+                    apim_key,
                 )
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
@@ -169,11 +193,18 @@ class GkpHomeConfigFlow(ConfigFlow, domain=DOMAIN):
                     data_updates={
                         CONF_REFRESH_TOKEN: token.refresh_token,
                         CONF_SUB: token.sub,
+                        **overrides,
                     },
                 )
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_PASSWORD): PASSWORD_SELECTOR,
+                **_credential_section(available=_credentials_available(entry.data)),
+            }
+        )
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=STEP_REAUTH_SCHEMA,
+            data_schema=schema,
             description_placeholders={CONF_EMAIL: entry.data[CONF_EMAIL]},
             errors=errors,
         )

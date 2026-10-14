@@ -12,8 +12,7 @@ MANUFACTURER: Final = "Gnosjö Klimatprodukter (Watts)"
 IDENTITY_HOST: Final = "https://gkp-id-prd.azurewebsites.net"
 API_HOST: Final = "https://gkp-apim-prd.azure-api.net"
 
-# OAuth constants embedded in the GKP Home app (the client secret and the APIM
-# subscription key are NOT embedded here; the user enters them in the config flow).
+# OAuth constants embedded in the GKP Home app.
 CLIENT_ID: Final = "835295d3-75c5-470c-82e1-9919f74c00c2"
 REDIRECT_URI: Final = "gkp://callback"
 OEM_CLIENT: Final = "gkp"
@@ -27,6 +26,12 @@ SCOPE: Final = (
     "TermOfUse.Read TermOfUse.Write"
 )
 
+# The API credentials the GKP Home app itself uses. Every install of the app
+# carries the same two values, so they are built in and users only need their
+# own GKP account. Leave them empty to make the config flow ask for them.
+APP_CLIENT_SECRET: Final = ""
+APP_SUBSCRIPTION_KEY: Final = ""
+
 USER_AGENT_API: Final = "okhttp/4.9.2"
 USER_AGENT_WEBVIEW: Final = (
     "Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A.240205.004; wv) "
@@ -36,9 +41,9 @@ USER_AGENT_WEBVIEW: Final = (
 X_REQUESTED_WITH: Final = "com.watts.gkp.mobile.prd"
 
 # Config entry data / options keys
-CONF_CLIENT_SECRET: Final = "client_secret"  # noqa: S105 - config key name
+CONF_CLIENT_SECRET: Final = "client_secret"
 CONF_APIM_KEY: Final = "apim_key"
-CONF_REFRESH_TOKEN: Final = "refresh_token"  # noqa: S105 - config key name
+CONF_REFRESH_TOKEN: Final = "refresh_token"
 CONF_SUB: Final = "sub"
 CONF_POLL_INTERVAL: Final = "poll_interval"
 

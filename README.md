@@ -30,12 +30,12 @@ to the GKP Home cloud with your own GKP account and exposes every radiator as a
 
 - Home Assistant 2025.1 or newer.
 - A GKP Home account that already has the radiators set up in the GKP Home app.
-- The two API credentials the GKP Home app itself uses: its **OAuth client
-  secret** and its **API subscription key** (`Ocp-Apim-Subscription-Key`).
-  The cloud only talks to clients that present them. **This integration does
-  not ship them**; you enter them once in the configuration dialog. They are
-  stored in Home Assistant's config entry storage and never written to logs or
-  diagnostics.
+- Nothing else. The cloud only talks to clients that present the GKP Home app's
+  own API credentials (an OAuth client secret and an API subscription key).
+  Every install of the app carries the same two values, and this integration
+  has them built in. If Watts ever changes them, an updated release is needed;
+  until then you can enter new values yourself in the collapsed *API
+  credentials (advanced)* section of the setup dialog.
 
 ## Installation
 
@@ -56,12 +56,14 @@ Assistant.
 
 1. Go to **Settings → Devices & services → Add integration** and search for
    **GKP Home**.
-2. Enter:
-   - **Email** and **password** of your GKP Home account. The password is used
-     once to sign in and is **not stored**.
-   - **Client secret** and **subscription key** of the GKP Home app.
-3. The integration signs in, verifies the API credentials and creates one device
-   per radiator.
+2. Enter the **email** and **password** of your GKP Home account. The password
+   is used once to sign in and is **not stored**.
+3. The integration signs in, checks that the API accepts the built-in
+   credentials and creates one device per radiator.
+
+The dialog also has a collapsed **API credentials (advanced)** section with
+optional *Client secret* and *Subscription key* fields that override the
+built-in values. Leave them empty unless you know you need them.
 
 ### Options
 
@@ -104,8 +106,8 @@ and controls **off / heat / auto** and the **target temperature**; the presets
 
 - Your password is sent to the GKP identity server once during setup (or
   re-authentication) and is never stored.
-- Only the **refresh token** is kept, together with the client secret and the
-  subscription key, in Home Assistant's config entry storage
+- Only the **refresh token** is kept (plus any API credentials you entered
+  yourself in the advanced section) in Home Assistant's config entry storage
   (`.storage/core.config_entries`). That file is not encrypted, so protect your
   configuration directory and backups like any other secrets.
 - The diagnostics download redacts tokens, secrets, your email, your user id
@@ -117,7 +119,10 @@ and controls **off / heat / auto** and the **target temperature**; the presets
 ## Troubleshooting
 
 - **"Invalid authentication"** during setup: check the email and password in
-  the GKP Home app first, then the client secret and subscription key. A wrong
+  the GKP Home app first. If signing in suddenly fails for everyone after an
+  app update, the app's API credentials may have changed: update the
+  integration, or enter the new values in the *API credentials (advanced)*
+  section of the dialog. A rejected
   subscription key is reported as invalid authentication as well, because the
   cloud answers every API call with *401 Unauthorized*.
 - **Re-authentication required**: when the cloud rejects the saved refresh
