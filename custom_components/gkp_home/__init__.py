@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import partial
 import logging
+from typing import Any
 
 import aiohttp
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import (
     async_create_clientsession,
     async_get_clientsession,
@@ -17,6 +19,8 @@ from homeassistant.util import dt as dt_util
 
 from .api import GkpHomeApi, TokenSet
 from .const import (
+    APP_CLIENT_SECRET,
+    APP_SUBSCRIPTION_KEY,
     CONF_APIM_KEY,
     CONF_CLIENT_SECRET,
     CONF_REFRESH_TOKEN,
@@ -28,6 +32,22 @@ from .coordinator import GkpHomeConfigEntry, GkpHomeCoordinator, poll_interval
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.CLIMATE, Platform.SENSOR]
+
+
+def embedded_credentials_available() -> bool:
+    """Return True if this build carries the GKP Home app's API credentials."""
+    return bool(APP_CLIENT_SECRET and APP_SUBSCRIPTION_KEY)
+
+
+def resolve_app_credentials(data: Mapping[str, Any]) -> tuple[str, str]:
+    """Return the client secret and subscription key to use.
+
+    Values the user entered (stored in the config entry) win over the built-in
+    ones, so a changed app credential can be worked around without an update.
+    """
+    client_secret = str(data.get(CONF_CLIENT_SECRET) or "").strip() or APP_CLIENT_SECRET
+    apim_key = str(data.get(CONF_APIM_KEY) or "").strip() or APP_SUBSCRIPTION_KEY
+    return client_secret, apim_key
 
 
 @callback
@@ -79,10 +99,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: GkpHomeConfigEntry) -> b
                 entry, data={**entry.data, CONF_REFRESH_TOKEN: token.refresh_token}
             )
 
+    client_secret, apim_key = resolve_app_credentials(entry.data)
+    if not client_secret or not apim_key:
+        # Neither built in nor stored: let the user enter them via reauth.
+        raise ConfigEntryAuthFailed("The GKP Home API credentials are missing")
     api = create_api(
         hass,
-        entry.data[CONF_CLIENT_SECRET],
-        entry.data[CONF_APIM_KEY],
+        client_secret,
+        apim_key,
         refresh_token=entry.data.get(CONF_REFRESH_TOKEN),
         token_listener=_store_refresh_token,
     )

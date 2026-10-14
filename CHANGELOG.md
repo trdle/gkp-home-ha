@@ -29,9 +29,9 @@ First release of the GKP Home custom integration for Home Assistant.
 
 Add `https://github.com/trdle/gkp-home-ha` as a custom repository (category
 *Integration*) in HACS, install *GKP Home*, restart Home Assistant and add the
-integration. You need your GKP Home email and password plus the client secret
-and subscription key the GKP Home app uses; this integration does not ship
-them.
+integration with your GKP Home email and password. The API credentials of the
+GKP Home app are built in (they can be overridden in the dialog's collapsed
+*API credentials* section).
 
 **Notes**
 

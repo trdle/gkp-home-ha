@@ -3,18 +3,28 @@
     "step": {
       "user": {
         "title": "Sign in to GKP Home",
-        "description": "Sign in with your GKP Home account. The client secret and subscription key are the values the GKP Home app uses to talk to the cloud; this integration does not ship them. Your password is used once to sign in and is not stored.",
+        "description": "Sign in with your GKP Home account. Your password is used once to sign in and is not stored.",
         "data": {
           "email": "Email",
-          "password": "Password",
-          "client_secret": "Client secret",
-          "apim_key": "Subscription key"
+          "password": "Password"
         },
         "data_description": {
           "email": "The email address of your GKP Home account.",
-          "password": "Your GKP Home password. It is only used to sign in and is not stored.",
-          "client_secret": "The OAuth client secret embedded in the GKP Home app.",
-          "apim_key": "The API subscription key (Ocp-Apim-Subscription-Key) embedded in the GKP Home app."
+          "password": "Your GKP Home password. It is only used to sign in and is not stored."
+        },
+        "sections": {
+          "api_credentials": {
+            "name": "API credentials (advanced)",
+            "description": "The values the GKP Home app uses to talk to the cloud. They are built into this integration; only fill these in if they have changed.",
+            "data": {
+              "client_secret": "Client secret",
+              "apim_key": "Subscription key"
+            },
+            "data_description": {
+              "client_secret": "The OAuth client secret of the GKP Home app. Leave empty to use the built-in value.",
+              "apim_key": "The API subscription key (Ocp-Apim-Subscription-Key) of the GKP Home app. Leave empty to use the built-in value."
+            }
+          }
         }
       },
       "reauth_confirm": {
@@ -25,11 +35,25 @@
         },
         "data_description": {
           "password": "Your GKP Home password. It is only used to sign in and is not stored."
+        },
+        "sections": {
+          "api_credentials": {
+            "name": "API credentials (advanced)",
+            "description": "The values the GKP Home app uses to talk to the cloud. Only fill these in if they have changed.",
+            "data": {
+              "client_secret": "Client secret",
+              "apim_key": "Subscription key"
+            },
+            "data_description": {
+              "client_secret": "The OAuth client secret of the GKP Home app. Leave empty to keep the current value.",
+              "apim_key": "The API subscription key (Ocp-Apim-Subscription-Key) of the GKP Home app. Leave empty to keep the current value."
+            }
+          }
         }
       }
     },
     "error": {
-      "invalid_auth": "Invalid authentication. Check the email, password, client secret and subscription key.",
+      "invalid_auth": "Invalid authentication. Check your email and password. If signing in recently stopped working for everyone, the GKP Home app's API credentials may have changed; update the integration.",
       "cannot_connect": "Failed to connect to the GKP Home cloud.",
       "unknown": "Unexpected error."
     },

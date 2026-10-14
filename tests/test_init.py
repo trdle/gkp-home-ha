@@ -2,23 +2,37 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import timedelta
+from unittest.mock import patch
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.const import CONF_EMAIL, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.gkp_home.const import (
+    CLIENT_ID,
     CONF_POLL_INTERVAL,
     CONF_REFRESH_TOKEN,
+    CONF_SUB,
     DOMAIN,
 )
 
 from .conftest import FROZEN_NOW, INSTALLATION_ID, calls, register_cloud
-from .helpers import SUB, token_response
+from .helpers import EMAIL, SUB, token_response
+
+
+def account_only_entry() -> MockConfigEntry:
+    """Return an entry created by a build with built-in credentials."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title=EMAIL,
+        unique_id=SUB,
+        data={CONF_EMAIL: EMAIL, CONF_SUB: SUB, CONF_REFRESH_TOKEN: "refresh-token-0"},
+    )
 
 
 async def test_setup_and_unload(
@@ -142,3 +156,47 @@ async def test_poll_interval_option(
     await hass.async_block_till_done()
     assert mock_config_entry.runtime_data is coordinator
     assert coordinator.update_interval == timedelta(seconds=30)
+
+
+async def test_setup_uses_builtin_credentials(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to(FROZEN_NOW)
+    register_cloud(aioclient_mock)
+    entry = account_only_entry()
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.gkp_home.APP_CLIENT_SECRET", "embedded-dummy-secret"),
+        patch("custom_components.gkp_home.APP_SUBSCRIPTION_KEY", "embedded-dummy-key"),
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    ((_, _, _, headers),) = calls(aioclient_mock, "POST", "/connect/token")
+    basic = base64.b64encode(f"{CLIENT_ID}:embedded-dummy-secret".encode()).decode()
+    assert headers["Authorization"] == f"Basic {basic}"
+    assert headers["Ocp-Apim-Subscription-Key"] == "embedded-dummy-key"
+    # The built-in values are not copied into the entry.
+    assert "client_secret" not in entry.data
+    assert "apim_key" not in entry.data
+
+
+async def test_setup_without_any_credentials_starts_reauth(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    entry = account_only_entry()
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.gkp_home.APP_CLIENT_SECRET", ""),
+        patch("custom_components.gkp_home.APP_SUBSCRIPTION_KEY", ""),
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert aioclient_mock.call_count == 0
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]

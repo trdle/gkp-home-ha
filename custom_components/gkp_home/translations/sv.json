@@ -3,18 +3,28 @@
     "step": {
       "user": {
         "title": "Logga in på GKP Home",
-        "description": "Logga in med ditt GKP Home-konto. Klienthemligheten och prenumerationsnyckeln är de värden som GKP Home-appen använder mot molnet; den här integrationen levererar dem inte. Ditt lösenord används en gång för att logga in och sparas inte.",
+        "description": "Logga in med ditt GKP Home-konto. Ditt lösenord används en gång för att logga in och sparas inte.",
         "data": {
           "email": "E-post",
-          "password": "Lösenord",
-          "client_secret": "Klienthemlighet",
-          "apim_key": "Prenumerationsnyckel"
+          "password": "Lösenord"
         },
         "data_description": {
           "email": "E-postadressen till ditt GKP Home-konto.",
-          "password": "Ditt lösenord för GKP Home. Det används bara för att logga in och sparas inte.",
-          "client_secret": "OAuth-klienthemligheten som är inbyggd i GKP Home-appen.",
-          "apim_key": "API-prenumerationsnyckeln (Ocp-Apim-Subscription-Key) som är inbyggd i GKP Home-appen."
+          "password": "Ditt lösenord för GKP Home. Det används bara för att logga in och sparas inte."
+        },
+        "sections": {
+          "api_credentials": {
+            "name": "API-uppgifter (avancerat)",
+            "description": "Värdena som GKP Home-appen använder mot molnet. De är inbyggda i integrationen; fyll bara i dem om de har ändrats.",
+            "data": {
+              "client_secret": "Klienthemlighet",
+              "apim_key": "Prenumerationsnyckel"
+            },
+            "data_description": {
+              "client_secret": "GKP Home-appens OAuth-klienthemlighet. Lämna tomt för att använda det inbyggda värdet.",
+              "apim_key": "GKP Home-appens API-prenumerationsnyckel (Ocp-Apim-Subscription-Key). Lämna tomt för att använda det inbyggda värdet."
+            }
+          }
         }
       },
       "reauth_confirm": {
@@ -25,11 +35,25 @@
         },
         "data_description": {
           "password": "Ditt lösenord för GKP Home. Det används bara för att logga in och sparas inte."
+        },
+        "sections": {
+          "api_credentials": {
+            "name": "API-uppgifter (avancerat)",
+            "description": "Värdena som GKP Home-appen använder mot molnet. Fyll bara i dem om de har ändrats.",
+            "data": {
+              "client_secret": "Klienthemlighet",
+              "apim_key": "Prenumerationsnyckel"
+            },
+            "data_description": {
+              "client_secret": "GKP Home-appens OAuth-klienthemlighet. Lämna tomt för att behålla det nuvarande värdet.",
+              "apim_key": "GKP Home-appens API-prenumerationsnyckel (Ocp-Apim-Subscription-Key). Lämna tomt för att behålla det nuvarande värdet."
+            }
+          }
         }
       }
     },
     "error": {
-      "invalid_auth": "Ogiltig inloggning. Kontrollera e-post, lösenord, klienthemlighet och prenumerationsnyckel.",
+      "invalid_auth": "Ogiltig inloggning. Kontrollera e-post och lösenord. Om inloggningen nyligen slutade fungera för alla kan GKP Home-appens API-uppgifter ha ändrats; uppdatera integrationen.",
       "cannot_connect": "Det gick inte att ansluta till GKP Home-molnet.",
       "unknown": "Oväntat fel."
     },
