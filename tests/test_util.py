@@ -57,9 +57,13 @@ def test_parse_device_time() -> None:
     parsed = parse_device_time("12/10/2026 20:57:58", STOCKHOLM)
     assert parsed == datetime(2026, 10, 12, 20, 57, 58, tzinfo=STOCKHOLM)
     assert parsed.astimezone(UTC) == datetime(2026, 10, 12, 18, 57, 58, tzinfo=UTC)
+    assert parse_device_time(" 12/10/2026 20:57:58 ", STOCKHOLM) == parsed
     assert parse_device_time("2026-10-12 20:57:58", STOCKHOLM) is None
     assert parse_device_time("", STOCKHOLM) is None
     assert parse_device_time(None, STOCKHOLM) is None
+    # The live cloud has delivered objects here; never raise on them.
+    assert parse_device_time({"value": "12/10/2026 20:57:58"}, STOCKHOLM) is None
+    assert parse_device_time(1760302678, STOCKHOLM) is None
 
 
 def test_device_time_age() -> None:

@@ -71,6 +71,40 @@ def _as_temperature(value: Any) -> float | None:
     return tenths_f_to_celsius(number) if number is not None else None
 
 
+def _as_str(value: Any) -> str | None:
+    """Return a non-empty scalar as a string, or None for anything else."""
+    if isinstance(value, str):
+        return value.strip() or None
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return str(value)
+    return None
+
+
+# Keys under which a wrapped content value (``{"value": ...}``) holds the value.
+_VALUE_WRAPPER_KEYS = ("wattsTypeValue", "value", "Value", "val", "v")
+
+
+def normalize_content(raw: dict[str, Any]) -> dict[str, Any]:
+    """Return the content with wrapped values unwrapped.
+
+    The reverse-engineered sample has plain values, but the live cloud has been
+    seen delivering objects for some keys. Known wrappers and single-entry
+    objects are unwrapped; anything else is left as is, and the raw payload stays
+    available in the diagnostics.
+    """
+    content: dict[str, Any] = {}
+    for key, raw_value in raw.items():
+        value = raw_value
+        if isinstance(raw_value, dict):
+            wrapper = next((k for k in _VALUE_WRAPPER_KEYS if k in raw_value), None)
+            if wrapper is not None:
+                value = raw_value[wrapper]
+            elif len(raw_value) == 1:
+                value = next(iter(raw_value.values()))
+        content[key] = value
+    return content
+
+
 @dataclass
 class Radiator:
     """A GKP WiFi radiator with its latest reported state (content)."""
@@ -86,6 +120,8 @@ class Radiator:
     # True when this cycle's content request failed and the data is from an
     # earlier cycle.
     stale: bool = False
+    # The payload exactly as the cloud delivered it, for diagnostics.
+    raw_content: dict[str, Any] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -143,8 +179,7 @@ class Radiator:
     @property
     def firmware(self) -> str | None:
         """Return the firmware version (``Sv``)."""
-        value = self.content.get(KEY_FIRMWARE)
-        return str(value) if value else None
+        return _as_str(self.content.get(KEY_FIRMWARE))
 
     def is_online(self, now: datetime) -> bool:
         """Return True if the radiator reported recently."""
@@ -263,6 +298,8 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         self.device_zone = device_zone
         self._semaphore = asyncio.Semaphore(CONTENT_CONCURRENCY)
         self._cancel_refresh: CALLBACK_TYPE | None = None
+        # Radiators whose timestamp could not be parsed (warned about once).
+        self._unparsed_time: set[str] = set()
 
     async def _async_update_data(self) -> GkpHomeData:
         """Fetch installations, then the content of every radiator."""
@@ -301,9 +338,25 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
                     meta.room_name,
                     result,
                 )
-                content, stale = known.content, True
+                content, raw_content, stale = known.content, known.raw_content, True
             else:
-                content, stale = result, False
+                _LOGGER.debug("Content of radiator %s: %s", meta.id, result)
+                content, raw_content, stale = normalize_content(result), result, False
+            reported = content.get(KEY_DEVICE_TIME)
+            last_report = parse_device_time(reported, self.device_zone)
+            if (
+                last_report is None
+                and reported is not None
+                and meta.id not in self._unparsed_time
+            ):
+                self._unparsed_time.add(meta.id)
+                _LOGGER.warning(
+                    "Radiator %s (%s) reports its timestamp in an unexpected format"
+                    " (%.200r); its online state cannot be determined",
+                    meta.id,
+                    meta.room_name,
+                    reported,
+                )
             radiators[meta.id] = Radiator(
                 id=meta.id,
                 home_id=meta.home_id,
@@ -312,10 +365,9 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
                 room_name=meta.room_name,
                 content=content,
                 model=_model(content, meta.model_hex),
-                last_report=parse_device_time(
-                    content.get(KEY_DEVICE_TIME), self.device_zone
-                ),
+                last_report=last_report,
                 stale=stale,
+                raw_content=raw_content,
             )
 
         if devices and not radiators:
@@ -374,6 +426,6 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
 
 def _model(content: dict[str, Any], model_hex: str | None) -> str | None:
     """Return the model name from the content, else decoded from the device list."""
-    if model := content.get(KEY_MODEL):
-        return str(model)
-    return hex_ascii_to_str(model_hex) if model_hex else None
+    if model := _as_str(content.get(KEY_MODEL)):
+        return model
+    return hex_ascii_to_str(model_hex) if isinstance(model_hex, str) else None

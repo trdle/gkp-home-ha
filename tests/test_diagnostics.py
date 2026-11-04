@@ -50,6 +50,7 @@ async def test_diagnostics(
     assert kitchen["stale"] is False
     assert kitchen["last_report"] == "2026-10-12T20:57:58+02:00"
     assert kitchen["content"]["At"] == 700
+    assert kitchen["raw_content"]["At"] == 700
     assert office["online"] is False
 
     (raw,) = diagnostics["raw_installations"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, tzinfo
 import math
 import re
+from typing import Any
 
 from .const import DEVICE_TIME_FORMAT
 
@@ -37,12 +38,16 @@ def hex_ascii_to_str(value: str) -> str | None:
         return None
 
 
-def parse_device_time(value: str | None, zone: tzinfo) -> datetime | None:
-    """Parse the radiator's own timestamp (``Dd``, ``dd/MM/yyyy HH:mm:ss``)."""
-    if not value:
+def parse_device_time(value: Any, zone: tzinfo) -> datetime | None:
+    """Parse the radiator's own timestamp (``Dd``, ``dd/MM/yyyy HH:mm:ss``).
+
+    Anything that is not a string in that format yields None instead of an
+    error, so an unexpected payload never takes the whole integration down.
+    """
+    if not isinstance(value, str) or not value.strip():
         return None
     try:
-        naive = datetime.strptime(value, DEVICE_TIME_FORMAT)  # noqa: DTZ007 - zone added below
+        naive = datetime.strptime(value.strip(), DEVICE_TIME_FORMAT)  # noqa: DTZ007 - zone added below
     except ValueError:
         return None
     return naive.replace(tzinfo=zone)

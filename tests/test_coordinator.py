@@ -6,11 +6,16 @@ from datetime import timedelta
 from zoneinfo import ZoneInfo
 
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.components.climate import ATTR_CURRENT_TEMPERATURE, HVACMode
-from homeassistant.config_entries import SOURCE_REAUTH
-from homeassistant.const import STATE_UNAVAILABLE
+from homeassistant.components.climate import (
+    ATTR_CURRENT_TEMPERATURE,
+    ATTR_PRESET_MODE,
+    HVACMode,
+)
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
+from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr
+import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -18,9 +23,14 @@ from pytest_homeassistant_custom_component.common import (
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.gkp_home.const import DOMAIN
-from custom_components.gkp_home.coordinator import Radiator, parse_installations
+from custom_components.gkp_home.coordinator import (
+    Radiator,
+    normalize_content,
+    parse_installations,
+)
 
 from .conftest import (
+    FROZEN_NOW,
     INSTALLATION_ID,
     KITCHEN,
     OFFICE,
@@ -257,3 +267,87 @@ def test_radiator_properties() -> None:
     assert radiator.firmware == "104"
     assert radiator.boost_minutes is None
     assert radiator.is_online(None) is False
+
+
+def test_normalize_content() -> None:
+    assert normalize_content(
+        {
+            "At": {"wattsTypeValue": 700},
+            "Dd": {"value": "12/10/2026 20:57:58"},
+            "Sp": {"Dd": 464},
+            "Ty": {"Value": "P08073"},
+            "Cg": [5, 0],
+            "Pw": 1000,
+            "H3": {"a": 1, "b": 2},
+            "Sv": None,
+        }
+    ) == {
+        "At": 700,
+        "Dd": "12/10/2026 20:57:58",
+        "Sp": 464,
+        "Ty": "P08073",
+        "Cg": [5, 0],
+        "Pw": 1000,
+        "H3": {"a": 1, "b": 2},
+        "Sv": None,
+    }
+
+
+async def test_wrapped_values_are_unwrapped(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to(FROZEN_NOW)
+    kitchen = kitchen_content(
+        At={"wattsTypeValue": 700},
+        Dd={"value": "12/10/2026 20:57:58"},
+        Dm={"value": 3},
+        Ty={"Value": "P08073"},
+    )
+    register_cloud(aioclient_mock, kitchen={"json": kitchen})
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    state = hass.states.get("climate.kitchen")
+    assert state.state == HVACMode.HEAT
+    assert state.attributes[ATTR_CURRENT_TEMPERATURE] == 21.1
+    assert state.attributes[ATTR_PRESET_MODE] == "comfort"
+    assert hass.states.get("binary_sensor.kitchen_online").state == STATE_ON
+    assert hass.states.get("sensor.kitchen_last_report").state == (
+        "2026-10-12T18:57:58+00:00"
+    )
+    radiator = mock_config_entry.runtime_data.data.radiators[KITCHEN]
+    assert radiator.model == "P08073"
+    assert radiator.raw_content["At"] == {"wattsTypeValue": 700}
+
+
+async def test_unexpected_timestamp_shape_does_not_break_setup(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    freezer.move_to(FROZEN_NOW)
+    kitchen = kitchen_content(Dd={"date": "12/10/2026", "time": "20:57:58"}, Ty=None)
+    register_cloud(aioclient_mock, kitchen={"json": kitchen})
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("climate.kitchen").state == HVACMode.HEAT
+    assert hass.states.get("binary_sensor.kitchen_online").state == STATE_OFF
+    assert hass.states.get("sensor.kitchen_last_report").state == STATE_UNKNOWN
+    assert "unexpected format" in caplog.text
+    radiator = mock_config_entry.runtime_data.data.radiators[KITCHEN]
+    assert radiator.raw_content["Dd"] == {"date": "12/10/2026", "time": "20:57:58"}
+    assert radiator.model == "P08073"  # decoded from the device list instead
+
+    # The warning is logged once, not on every poll.
+    caplog.clear()
+    await poll(hass, freezer)
+    assert "unexpected format" not in caplog.text

@@ -66,6 +66,7 @@ async def async_get_config_entry_diagnostics(
                 "online": radiator.is_online(now),
                 "stale": radiator.stale,
                 "content": radiator.content,
+                "raw_content": radiator.raw_content,
             }
             for radiator in data.radiators.values()
         ],
