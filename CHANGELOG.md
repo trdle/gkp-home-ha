@@ -3,7 +3,7 @@
 All notable changes to this integration are documented here. The section for
 a version is used as the GitHub release notes when its `v*` tag is pushed.
 
-## v0.1.0
+## v1.0.0
 
 First release of the GKP Home custom integration for Home Assistant.
 

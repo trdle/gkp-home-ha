@@ -1,6 +1,6 @@
 [project]
 name = "gkp-home-ha"
-version = "0.1.0"
+version = "1.0.0"
 description = "Home Assistant custom integration for GKP Home WiFi radiators"
 readme = "README.md"
 license = "MIT"
