@@ -67,8 +67,31 @@ built-in values. Leave them empty unless you know you need them.
 
 ### Options
 
-Open the integration's **Configure** dialog to change the **poll interval**
-(default 60 seconds, minimum 30). Every poll reads all radiators from the cloud.
+Open the integration's **Configure** dialog to change:
+
+- the **poll interval** (default 60 seconds, minimum 30). Every poll reads all
+  radiators from the cloud.
+- the **wake interval** (default 5 minutes, 0 turns it off). See *Keeping
+  values fresh* below.
+
+### Keeping values fresh
+
+The radiators do not report on their own. They send their state when the GKP
+Home app wakes them or when something changes (a command, a knob turned). The
+integration therefore does two things on every poll:
+
+1. It tells the cloud a user is connected (the app's `userconnected` call) before
+   reading the radiators.
+2. If a radiator has still not reported within the **wake interval**, it
+   re-sends the radiator's current mode. That changes nothing on the radiator
+   but makes it report, room temperature included, and the radiator is read
+   again a few seconds later. Radiators in boost, or still applying a mode
+   change, are left alone, and every command you send resets the clock.
+
+With the default settings a silent radiator is nudged at most every five
+minutes, so temperatures are at most about five minutes old. Set the wake
+interval to 0 if you prefer no writes to the radiators at all; values then
+update only when you or the app change something.
 
 ## How modes map
 

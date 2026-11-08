@@ -28,6 +28,7 @@ from custom_components.gkp_home.const import (
     CONF_POLL_INTERVAL,
     CONF_REFRESH_TOKEN,
     CONF_SUB,
+    CONF_WAKE_INTERVAL,
     DOMAIN,
 )
 
@@ -490,12 +491,12 @@ async def test_options_flow(
     assert result["step_id"] == "init"
 
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_POLL_INTERVAL: 45}
+        result["flow_id"], {CONF_POLL_INTERVAL: 45, CONF_WAKE_INTERVAL: 10}
     )
     await hass.async_block_till_done()
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert init_integration.options == {CONF_POLL_INTERVAL: 45}
+    assert init_integration.options == {CONF_POLL_INTERVAL: 45, CONF_WAKE_INTERVAL: 10}
     assert init_integration.runtime_data.update_interval == timedelta(seconds=45)
 
 
@@ -505,5 +506,23 @@ async def test_options_flow_rejects_short_interval(
     result = await hass.config_entries.options.async_init(init_integration.entry_id)
     with pytest.raises(vol.Invalid):
         await hass.config_entries.options.async_configure(
-            result["flow_id"], {CONF_POLL_INTERVAL: 10}
+            result["flow_id"], {CONF_POLL_INTERVAL: 10, CONF_WAKE_INTERVAL: 5}
         )
+
+
+async def test_options_flow_rejects_long_wake_interval(
+    hass: HomeAssistant, init_integration: MockConfigEntry
+) -> None:
+    result = await hass.config_entries.options.async_init(init_integration.entry_id)
+    with pytest.raises(vol.Invalid):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"], {CONF_POLL_INTERVAL: 60, CONF_WAKE_INTERVAL: 61}
+        )
+
+    # Zero turns the wake nudge off.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_POLL_INTERVAL: 60, CONF_WAKE_INTERVAL: 0}
+    )
+    await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert init_integration.options == {CONF_POLL_INTERVAL: 60, CONF_WAKE_INTERVAL: 0}

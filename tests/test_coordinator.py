@@ -22,7 +22,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.gkp_home.const import DOMAIN
+from custom_components.gkp_home.const import CONF_WAKE_INTERVAL, DOMAIN
 from custom_components.gkp_home.coordinator import (
     Radiator,
     normalize_content,
@@ -36,7 +36,9 @@ from .conftest import (
     KITCHEN,
     OFFICE,
     calls,
+    config_writes,
     content_reads,
+    envelope,
     kitchen_content,
     office_content,
     register_cloud,
@@ -432,3 +434,98 @@ async def test_ping_results(
     await poll(hass, freezer)
     assert coordinator.ping_results == {INSTALLATION_ID: "ok"}
     assert "user-connected ping" not in caplog.text
+
+
+async def setup_with_default_wake(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Set up the entry with the default options (wake after 5 silent minutes)."""
+    freezer.move_to(FROZEN_NOW)
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(mock_config_entry, options={})
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+
+async def test_wake_silent_radiator(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_cloud: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    await setup_with_default_wake(hass, mock_config_entry, freezer)
+
+    # The office has been silent for 90 minutes: its current mode is re-sent
+    # and it is read again; the kitchen reported 2 minutes ago and is left alone.
+    assert config_writes(mock_cloud) == [
+        envelope(OFFICE, [{"wattsType": "Dm", "wattsTypeValue": 3}])
+    ]
+    assert content_reads(mock_cloud, OFFICE) == 2
+    assert content_reads(mock_cloud, KITCHEN) == 1
+    assert hass.states.get("climate.office").state == HVACMode.HEAT
+
+    # Not nudged again within the wake interval, even though it stays silent.
+    await poll(hass, freezer)
+    assert len(config_writes(mock_cloud)) == 1
+
+    # Six minutes later both are nudged: the office again, and the kitchen for
+    # the first time because its last report is now eight minutes old.
+    freezer.tick(timedelta(minutes=5))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    writes = config_writes(mock_cloud)
+    assert len(writes) == 3
+    assert [write["Id_deviceId"] for write in writes[1:]] == [KITCHEN, OFFICE]
+    assert writes[1] == envelope(KITCHEN, [{"wattsType": "Dm", "wattsTypeValue": 4}])
+    assert content_reads(mock_cloud, KITCHEN) == 4  # three polls plus one re-read
+
+
+async def test_wake_disabled(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_cloud: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    assert init_integration.options == {CONF_WAKE_INTERVAL: 0}
+    await poll(hass, freezer)
+    assert config_writes(mock_cloud) == []
+    assert content_reads(mock_cloud, OFFICE) == 2  # one read per poll, nothing more
+
+
+async def test_wake_leaves_boost_and_changing_radiators_alone(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # Office: silent, but boosting. Kitchen: silent (old clock stamp), but the
+    # radiator has not applied the demanded mode yet.
+    office = office_content(Dm=5, Cm=5)
+    kitchen = kitchen_content(
+        Cm=3, Dd={"timestamp": 1791000000, "value": "02/10/2026 10:00:00"}
+    )
+    register_cloud(aioclient_mock, kitchen={"json": kitchen}, office={"json": office})
+    await setup_with_default_wake(hass, mock_config_entry, freezer)
+
+    assert config_writes(aioclient_mock) == []
+    assert content_reads(aioclient_mock, KITCHEN) == 1
+    assert content_reads(aioclient_mock, OFFICE) == 1
+
+
+async def test_wake_failure_does_not_break_the_cycle(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    register_cloud(
+        aioclient_mock, config_replace={"status": 500, "text": "Internal Server Error"}
+    )
+    await setup_with_default_wake(hass, mock_config_entry, freezer)
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert len(config_writes(aioclient_mock)) == 1  # the attempt
+    assert content_reads(aioclient_mock, OFFICE) == 1  # no re-read after a failure
+    assert hass.states.get("climate.office").state == HVACMode.HEAT

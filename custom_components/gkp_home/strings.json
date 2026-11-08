@@ -68,10 +68,12 @@
       "init": {
         "title": "GKP Home options",
         "data": {
-          "poll_interval": "Poll interval"
+          "poll_interval": "Poll interval",
+          "wake_interval": "Wake interval"
         },
         "data_description": {
-          "poll_interval": "How often the radiators are read from the cloud, in seconds (minimum 30)."
+          "poll_interval": "How often the radiators are read from the cloud, in seconds (minimum 30).",
+          "wake_interval": "How long, in minutes, a radiator may stay silent before the integration nudges it to report (0 turns this off). The nudge re-sends the radiator's current mode, which makes it send its temperature; radiators in boost are left alone."
         }
       }
     }

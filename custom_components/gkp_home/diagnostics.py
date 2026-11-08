@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_APIM_KEY, CONF_CLIENT_SECRET, CONF_REFRESH_TOKEN, CONF_SUB
-from .coordinator import GkpHomeConfigEntry
+from .coordinator import GkpHomeConfigEntry, wake_interval
 
 TO_REDACT = {
     CONF_REFRESH_TOKEN,
@@ -49,6 +49,11 @@ async def async_get_config_entry_diagnostics(
             coordinator.update_interval.total_seconds()
             if coordinator.update_interval
             else None
+        ),
+        "wake_interval_minutes": (
+            int(interval.total_seconds() // 60)
+            if (interval := wake_interval(entry)) is not None
+            else 0
         ),
         "last_update_success": coordinator.last_update_success,
         "user_connected_pings": [

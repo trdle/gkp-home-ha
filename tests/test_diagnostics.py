@@ -12,6 +12,7 @@ from custom_components.gkp_home.const import (
     CONF_CLIENT_SECRET,
     CONF_REFRESH_TOKEN,
     CONF_SUB,
+    CONF_WAKE_INTERVAL,
 )
 from custom_components.gkp_home.diagnostics import async_get_config_entry_diagnostics
 
@@ -31,9 +32,10 @@ async def test_diagnostics(
             CONF_CLIENT_SECRET: REDACTED,
             CONF_APIM_KEY: REDACTED,
         },
-        "options": {},
+        "options": {CONF_WAKE_INTERVAL: 0},
     }
     assert diagnostics["poll_interval_seconds"] == 60
+    assert diagnostics["wake_interval_minutes"] == 0
     assert diagnostics["last_update_success"] is True
 
     (home,) = diagnostics["homes"]

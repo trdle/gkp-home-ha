@@ -48,9 +48,15 @@ CONF_APIM_KEY: Final = "apim_key"
 CONF_REFRESH_TOKEN: Final = "refresh_token"
 CONF_SUB: Final = "sub"
 CONF_POLL_INTERVAL: Final = "poll_interval"
+CONF_WAKE_INTERVAL: Final = "wake_interval"
 
 DEFAULT_POLL_INTERVAL: Final = 60
 MIN_POLL_INTERVAL: Final = 30
+# Minutes a radiator may stay silent before it is nudged to report (0 = never).
+DEFAULT_WAKE_INTERVAL: Final = 5
+MAX_WAKE_INTERVAL: Final = 60
+# Seconds to wait after the nudge before reading the radiator again.
+WAKE_SETTLE_DELAY: Final = 3.0
 
 # Delay between a write and the follow-up refresh that confirms it.
 WRITE_REFRESH_DELAY: Final = 3.0

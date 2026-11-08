@@ -22,6 +22,7 @@ from custom_components.gkp_home.const import (
     CONF_CLIENT_SECRET,
     CONF_REFRESH_TOKEN,
     CONF_SUB,
+    CONF_WAKE_INTERVAL,
     DOMAIN,
 )
 
@@ -55,8 +56,11 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
 
 @pytest.fixture(autouse=True)
 def no_settle_delay() -> Generator[None]:
-    """Do not wait for the radiators between the user-connected ping and the reads."""
-    with patch("custom_components.gkp_home.coordinator.USER_CONNECTED_SETTLE_DELAY", 0):
+    """Do not wait for the radiators after the user-connected ping or a wake."""
+    with (
+        patch("custom_components.gkp_home.coordinator.USER_CONNECTED_SETTLE_DELAY", 0),
+        patch("custom_components.gkp_home.coordinator.WAKE_SETTLE_DELAY", 0),
+    ):
         yield
 
 
@@ -85,6 +89,9 @@ def mock_config_entry() -> MockConfigEntry:
             CONF_CLIENT_SECRET: CLIENT_SECRET,
             CONF_APIM_KEY: APIM_KEY,
         },
+        # The office fixture has been silent for 90 minutes; keep the wake
+        # nudge out of the way of tests that do not test it.
+        options={CONF_WAKE_INTERVAL: 0},
     )
 
 

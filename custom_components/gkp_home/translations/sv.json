@@ -68,10 +68,12 @@
       "init": {
         "title": "Alternativ för GKP Home",
         "data": {
-          "poll_interval": "Uppdateringsintervall"
+          "poll_interval": "Uppdateringsintervall",
+          "wake_interval": "Väckningsintervall"
         },
         "data_description": {
-          "poll_interval": "Hur ofta elementen läses från molnet, i sekunder (minst 30)."
+          "poll_interval": "Hur ofta elementen läses från molnet, i sekunder (minst 30).",
+          "wake_interval": "Hur länge, i minuter, ett element får vara tyst innan integrationen knuffar det att rapportera (0 stänger av). Knuffen skickar om elementets nuvarande läge, vilket får det att skicka sin temperatur; element i boost lämnas orörda."
         }
       }
     }

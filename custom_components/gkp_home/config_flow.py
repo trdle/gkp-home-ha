@@ -33,8 +33,11 @@ from .const import (
     CONF_POLL_INTERVAL,
     CONF_REFRESH_TOKEN,
     CONF_SUB,
+    CONF_WAKE_INTERVAL,
     DEFAULT_POLL_INTERVAL,
+    DEFAULT_WAKE_INTERVAL,
     DOMAIN,
+    MAX_WAKE_INTERVAL,
     MIN_POLL_INTERVAL,
 )
 
@@ -225,12 +228,13 @@ class GkpHomeOptionsFlow(OptionsFlow):
         """Show and store the options."""
         if user_input is not None:
             return self.async_create_entry(data=user_input)
-        current = self.config_entry.options.get(
-            CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
-        )
+        options = self.config_entry.options
         schema = vol.Schema(
             {
-                vol.Required(CONF_POLL_INTERVAL, default=current): vol.All(
+                vol.Required(
+                    CONF_POLL_INTERVAL,
+                    default=options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL),
+                ): vol.All(
                     NumberSelector(
                         NumberSelectorConfig(
                             min=MIN_POLL_INTERVAL,
@@ -242,7 +246,23 @@ class GkpHomeOptionsFlow(OptionsFlow):
                     ),
                     vol.Coerce(int),
                     vol.Range(min=MIN_POLL_INTERVAL),
-                )
+                ),
+                vol.Required(
+                    CONF_WAKE_INTERVAL,
+                    default=options.get(CONF_WAKE_INTERVAL, DEFAULT_WAKE_INTERVAL),
+                ): vol.All(
+                    NumberSelector(
+                        NumberSelectorConfig(
+                            min=0,
+                            max=MAX_WAKE_INTERVAL,
+                            step=1,
+                            mode=NumberSelectorMode.BOX,
+                            unit_of_measurement="min",
+                        )
+                    ),
+                    vol.Coerce(int),
+                    vol.Range(min=0, max=MAX_WAKE_INTERVAL),
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

@@ -21,8 +21,11 @@ First release of the GKP Home custom integration for Home Assistant.
   default) the eco / comfort / frost protection setpoints.
 - One Home Assistant device per radiator (MAC, model, firmware) suggested into
   an area named after the room.
-- Re-authentication flow, poll interval option (default 60 s, minimum 30 s),
-  diagnostics download with tokens, secrets and account ids redacted.
+- Keeps values fresh: tells the cloud a user is connected before every poll
+  and, after a configurable silence (default 5 minutes), re-sends a radiator's
+  current mode so it reports its temperature again.
+- Re-authentication flow, poll interval and wake interval options, diagnostics
+  download with tokens, secrets and account ids redacted.
 - English and Swedish translations.
 
 **Installation**

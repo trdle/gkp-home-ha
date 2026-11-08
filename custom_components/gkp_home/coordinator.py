@@ -13,12 +13,15 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import ApiError, CannotConnect, GkpHomeApi, GkpHomeError, InvalidAuth
 from .const import (
     CONF_POLL_INTERVAL,
+    CONF_WAKE_INTERVAL,
     CONTENT_CONCURRENCY,
     DEFAULT_POLL_INTERVAL,
+    DEFAULT_WAKE_INTERVAL,
     DOMAIN,
     KEY_BOOST_MINUTES,
     KEY_CURRENT_MODE,
@@ -38,9 +41,11 @@ from .const import (
     KEY_ROOMS,
     KEY_SETPOINT,
     MIN_POLL_INTERVAL,
+    MODE_BOOST,
     OFFLINE_AFTER,
     SETPOINT_KEYS,
     USER_CONNECTED_SETTLE_DELAY,
+    WAKE_SETTLE_DELAY,
     WRITE_REFRESH_DELAY,
 )
 from .util import (
@@ -293,6 +298,14 @@ def poll_interval(entry: ConfigEntry) -> timedelta:
     return timedelta(seconds=max(MIN_POLL_INTERVAL, seconds))
 
 
+def wake_interval(entry: ConfigEntry) -> timedelta | None:
+    """Return how long a radiator may stay silent before it is woken, or None."""
+    minutes = _as_int(entry.options.get(CONF_WAKE_INTERVAL))
+    if minutes is None:
+        minutes = DEFAULT_WAKE_INTERVAL
+    return timedelta(minutes=minutes) if minutes > 0 else None
+
+
 class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
     """Poll the GKP Home cloud for the state of every radiator."""
 
@@ -324,6 +337,8 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         # Outcome of the last user-connected ping per installation (diagnostics).
         self.ping_results: dict[str, str] = {}
         self._warned_pings: set[str] = set()
+        # When each radiator was last nudged to report.
+        self._last_wake: dict[str, datetime] = {}
 
     async def _async_update_data(self) -> GkpHomeData:
         """Fetch installations, then the content of every radiator."""
@@ -373,40 +388,132 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
             else:
                 _LOGGER.debug("Content of radiator %s: %s", meta.id, result)
                 content, raw_content, stale = normalize_content(result), result, False
-            reported = content.get(KEY_DEVICE_TIME)
-            last_report = report_time(raw_content, content, self.device_zone)
-            if (
-                last_report is None
-                and reported is not None
-                and meta.id not in self._unparsed_time
-            ):
-                self._unparsed_time.add(meta.id)
-                _LOGGER.warning(
-                    "Radiator %s (%s) reports its timestamp in an unexpected format"
-                    " (%.200r); its online state cannot be determined",
-                    meta.id,
-                    meta.room_name,
-                    reported,
-                )
-            radiators[meta.id] = Radiator(
-                id=meta.id,
-                home_id=meta.home_id,
-                home_name=meta.home_name,
-                room_id=meta.room_id,
-                room_name=meta.room_name,
-                content=content,
-                model=_model(content, meta.model_hex),
-                last_report=last_report,
-                stale=stale,
-                raw_content=raw_content,
-            )
+            radiators[meta.id] = self._build_radiator(meta, content, raw_content, stale)
 
         if devices and not radiators:
             raise UpdateFailed("Could not read the state of any radiator")
 
+        await self._async_wake_silent_radiators(
+            radiators, {device.id: device for device in devices}
+        )
+
         return GkpHomeData(
             homes=homes, radiators=radiators, raw_installations=installations
         )
+
+    def _build_radiator(
+        self,
+        meta: _DeviceMeta,
+        content: dict[str, Any],
+        raw_content: dict[str, Any],
+        stale: bool,
+    ) -> Radiator:
+        """Build a radiator from its normalized content."""
+        reported = content.get(KEY_DEVICE_TIME)
+        last_report = report_time(raw_content, content, self.device_zone)
+        if (
+            last_report is None
+            and reported is not None
+            and meta.id not in self._unparsed_time
+        ):
+            self._unparsed_time.add(meta.id)
+            _LOGGER.warning(
+                "Radiator %s (%s) reports its timestamp in an unexpected format"
+                " (%.200r); its online state cannot be determined",
+                meta.id,
+                meta.room_name,
+                reported,
+            )
+        return Radiator(
+            id=meta.id,
+            home_id=meta.home_id,
+            home_name=meta.home_name,
+            room_id=meta.room_id,
+            room_name=meta.room_name,
+            content=content,
+            model=_model(content, meta.model_hex),
+            last_report=last_report,
+            stale=stale,
+            raw_content=raw_content,
+        )
+
+    def _needs_wake(
+        self, radiator: Radiator, now: datetime, interval: timedelta
+    ) -> bool:
+        """Return True if a radiator has been silent long enough to be nudged.
+
+        Radiators in boost, radiators still applying a mode change and radiators
+        whose state could not be read are left alone.
+        """
+        mode = radiator.demanded_mode
+        if (
+            radiator.stale
+            or mode is None
+            or mode == MODE_BOOST
+            or radiator.current_mode != mode
+        ):
+            return False
+        if (
+            radiator.last_report is not None
+            and device_time_age(radiator.last_report, now) < interval
+        ):
+            return False
+        last_wake = self._last_wake.get(radiator.id)
+        return last_wake is None or now - last_wake >= interval
+
+    async def _async_wake_silent_radiators(
+        self, radiators: dict[str, Radiator], metas: dict[str, _DeviceMeta]
+    ) -> None:
+        """Nudge radiators that have not reported for a while and re-read them.
+
+        The radiators report on their own only when the app wakes them or
+        something changes. Re-sending a radiator's current mode changes nothing
+        on the radiator but makes it report, room temperature included.
+        """
+        if (interval := wake_interval(self.config_entry)) is None:
+            return
+        now = dt_util.utcnow()
+        woken: list[Radiator] = []
+        for radiator in radiators.values():
+            mode = radiator.demanded_mode
+            if mode is None or not self._needs_wake(radiator, now, interval):
+                continue
+            try:
+                await self.api.async_set_mode(radiator.id, mode)
+            except InvalidAuth as err:
+                raise ConfigEntryAuthFailed(
+                    "GKP Home rejected the saved session"
+                ) from err
+            except GkpHomeError as err:
+                _LOGGER.debug(
+                    "Could not wake radiator %s (%s): %s",
+                    radiator.id,
+                    radiator.room_name,
+                    err,
+                )
+                continue
+            self._last_wake[radiator.id] = now
+            woken.append(radiator)
+        if not woken:
+            return
+
+        _LOGGER.debug("Woke %d silent radiator(s); reading them again", len(woken))
+        await asyncio.sleep(WAKE_SETTLE_DELAY)
+        results = await asyncio.gather(
+            *(self._async_fetch_content(radiator.id) for radiator in woken),
+            return_exceptions=True,
+        )
+        for radiator, result in zip(woken, results, strict=True):
+            if isinstance(result, BaseException):
+                _LOGGER.debug(
+                    "Reading radiator %s again after waking it failed: %s",
+                    radiator.id,
+                    result,
+                )
+                continue
+            radiators[radiator.id] = self._build_radiator(
+                metas[radiator.id], normalize_content(result), result, False
+            )
 
     async def _async_ping_installations(self, homes: dict[str, Home]) -> bool:
         """Send the app-open ping for every installation; True if any succeeded."""
