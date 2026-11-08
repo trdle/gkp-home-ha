@@ -21,7 +21,7 @@ from pytest_homeassistant_custom_component.common import (
 )
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from .conftest import FROZEN_NOW, KITCHEN, kitchen_content, register_cloud
+from .conftest import FROZEN_NOW, KITCHEN, office_content, register_cloud
 
 
 async def test_binary_sensors(
@@ -72,13 +72,13 @@ async def test_heating_unknown_without_flag(
     freezer: FrozenDateTimeFactory,
 ) -> None:
     freezer.move_to(FROZEN_NOW)
-    kitchen = kitchen_content()
-    del kitchen["Hs"]
-    del kitchen["Dd"]
-    register_cloud(aioclient_mock, kitchen={"json": kitchen})
+    office = office_content()
+    del office["Hs"]
+    del office["Dd"]
+    register_cloud(aioclient_mock, office={"json": office})
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    assert hass.states.get("binary_sensor.kitchen_heating").state == STATE_UNKNOWN
-    assert hass.states.get("binary_sensor.kitchen_online").state == STATE_OFF
+    assert hass.states.get("binary_sensor.office_heating").state == STATE_UNKNOWN
+    assert hass.states.get("binary_sensor.office_online").state == STATE_OFF

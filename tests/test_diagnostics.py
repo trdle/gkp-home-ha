@@ -48,10 +48,12 @@ async def test_diagnostics(
     assert kitchen["model"] == "P08073"
     assert kitchen["online"] is True
     assert kitchen["stale"] is False
-    assert kitchen["last_report"] == "2026-10-12T20:57:58+02:00"
+    assert kitchen["last_report"] == "2026-10-12T18:57:58+00:00"  # cloud stamp
     assert kitchen["content"]["At"] == 700
-    assert kitchen["raw_content"]["At"] == 700
+    assert kitchen["raw_content"]["At"]["value"] == 700
     assert office["online"] is False
+    assert office["last_report"] == "2026-10-12T19:30:00+02:00"  # device clock
+    assert diagnostics["user_connected_pings"] == [{"In": REDACTED, "result": "ok"}]
 
     (raw,) = diagnostics["raw_installations"]
     assert raw["id"] == REDACTED

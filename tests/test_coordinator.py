@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from freezegun.api import FrozenDateTimeFactory
@@ -27,6 +27,7 @@ from custom_components.gkp_home.coordinator import (
     Radiator,
     normalize_content,
     parse_installations,
+    report_time,
 )
 
 from .conftest import (
@@ -37,6 +38,7 @@ from .conftest import (
     calls,
     content_reads,
     kitchen_content,
+    office_content,
     register_cloud,
 )
 from .helpers import INSTALLATIONS_URL, TOKEN_URL
@@ -324,7 +326,32 @@ async def test_wrapped_values_are_unwrapped(
     assert radiator.raw_content["At"] == {"wattsTypeValue": 700}
 
 
-async def test_unexpected_timestamp_shape_does_not_break_setup(
+def test_report_time() -> None:
+    raw = {
+        "At": {"timestamp": 1791831478, "value": 700},
+        "Dd": {"timestamp": 1791831470, "value": "12/10/2026 20:57:50"},
+        "Dm": {"timestamp": 1791000000, "value": 4},
+    }
+    # The stamp of the device clock wins over the device clock string.
+    assert report_time(raw, normalize_content(raw), STOCKHOLM) == datetime(
+        2026, 10, 12, 18, 57, 50, tzinfo=UTC
+    )
+    # Without a stamped device clock the newest stamp is used.
+    del raw["Dd"]
+    assert report_time(raw, normalize_content(raw), STOCKHOLM) == datetime(
+        2026, 10, 12, 18, 57, 58, tzinfo=UTC
+    )
+    # Flat payloads fall back to the device clock in local time.
+    flat = {"At": 700, "Dd": "12/10/2026 20:57:58"}
+    assert report_time(flat, flat, STOCKHOLM) == datetime(
+        2026, 10, 12, 20, 57, 58, tzinfo=STOCKHOLM
+    )
+    assert report_time({"At": 700}, {"At": 700}, STOCKHOLM) is None
+    zero = {"At": {"timestamp": 0, "value": 700}}
+    assert report_time(zero, normalize_content(zero), STOCKHOLM) is None
+
+
+async def test_unexpected_device_clock_shape_uses_value_stamps(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     aioclient_mock: AiohttpClientMocker,
@@ -340,14 +367,68 @@ async def test_unexpected_timestamp_shape_does_not_break_setup(
 
     assert mock_config_entry.state is ConfigEntryState.LOADED
     assert hass.states.get("climate.kitchen").state == HVACMode.HEAT
-    assert hass.states.get("binary_sensor.kitchen_online").state == STATE_OFF
-    assert hass.states.get("sensor.kitchen_last_report").state == STATE_UNKNOWN
-    assert "unexpected format" in caplog.text
+    # The other values carry stamps, so the report time is still known.
+    assert hass.states.get("binary_sensor.kitchen_online").state == STATE_ON
+    assert hass.states.get("sensor.kitchen_last_report").state == (
+        "2026-10-12T18:57:58+00:00"
+    )
+    assert "unexpected format" not in caplog.text
     radiator = mock_config_entry.runtime_data.data.radiators[KITCHEN]
     assert radiator.raw_content["Dd"] == {"date": "12/10/2026", "time": "20:57:58"}
     assert radiator.model == "P08073"  # decoded from the device list instead
+
+
+async def test_unparsable_device_clock_without_stamps(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    freezer.move_to(FROZEN_NOW)
+    register_cloud(aioclient_mock, office={"json": office_content(Dd="not a date")})
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("climate.office").state == HVACMode.HEAT
+    assert hass.states.get("binary_sensor.office_online").state == STATE_OFF
+    assert hass.states.get("sensor.office_last_report").state == STATE_UNKNOWN
+    assert "unexpected format" in caplog.text
 
     # The warning is logged once, not on every poll.
     caplog.clear()
     await poll(hass, freezer)
     assert "unexpected format" not in caplog.text
+
+
+async def test_ping_results(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    freezer.move_to(FROZEN_NOW)
+    aioclient_mock.put(
+        "https://gkp-apim-prd.azure-api.net/iotmanagement/v1/devices/userconnected",
+        status=500,
+        text="Internal Server Error",
+    )
+    register_cloud(aioclient_mock)
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = mock_config_entry.runtime_data
+    assert coordinator.ping_results[INSTALLATION_ID].startswith("failed: HTTP 500")
+    assert "user-connected ping for installation MyHouse failed" in caplog.text
+
+    # Once the ping works again the result reflects it, without more warnings.
+    caplog.clear()
+    aioclient_mock.clear_requests()
+    register_cloud(aioclient_mock)
+    await poll(hass, freezer)
+    assert coordinator.ping_results == {INSTALLATION_ID: "ok"}
+    assert "user-connected ping" not in caplog.text

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, tzinfo
+from datetime import UTC, datetime, timedelta, tzinfo
 import logging
 from typing import Any
 
@@ -104,6 +104,26 @@ def normalize_content(raw: dict[str, Any]) -> dict[str, Any]:
                 value = next(iter(raw_value.values()))
         content[key] = value
     return content
+
+
+def report_time(
+    raw: dict[str, Any], content: dict[str, Any], zone: tzinfo
+) -> datetime | None:
+    """Return when the radiator last reported its state.
+
+    The live cloud stamps every value with the UTC time it received it; the
+    stamp on the device clock (``Dd``) marks the last full report. Payloads
+    without stamps fall back to parsing the device clock string, which is in
+    the radiator's local time.
+    """
+    stamps: dict[str, int] = {}
+    for key, value in raw.items():
+        if isinstance(value, dict) and (stamp := _as_int(value.get("timestamp"))):
+            stamps[key] = stamp
+    stamp = stamps.get(KEY_DEVICE_TIME) or (max(stamps.values()) if stamps else None)
+    if stamp:
+        return datetime.fromtimestamp(stamp, tz=UTC)
+    return parse_device_time(content.get(KEY_DEVICE_TIME), zone)
 
 
 @dataclass
@@ -301,6 +321,9 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         self._cancel_refresh: CALLBACK_TYPE | None = None
         # Radiators whose timestamp could not be parsed (warned about once).
         self._unparsed_time: set[str] = set()
+        # Outcome of the last user-connected ping per installation (diagnostics).
+        self.ping_results: dict[str, str] = {}
+        self._warned_pings: set[str] = set()
 
     async def _async_update_data(self) -> GkpHomeData:
         """Fetch installations, then the content of every radiator."""
@@ -351,7 +374,7 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
                 _LOGGER.debug("Content of radiator %s: %s", meta.id, result)
                 content, raw_content, stale = normalize_content(result), result, False
             reported = content.get(KEY_DEVICE_TIME)
-            last_report = parse_device_time(reported, self.device_zone)
+            last_report = report_time(raw_content, content, self.device_zone)
             if (
                 last_report is None
                 and reported is not None
@@ -396,8 +419,17 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
                     "GKP Home rejected the saved session"
                 ) from err
             except GkpHomeError as err:
-                _LOGGER.debug("User-connected ping failed for %s: %s", home.id, err)
+                self.ping_results[home.id] = f"failed: {err}"
+                if home.id not in self._warned_pings:
+                    self._warned_pings.add(home.id)
+                    _LOGGER.warning(
+                        "The user-connected ping for installation %s failed (%s);"
+                        " the radiators may not report fresh values",
+                        home.name,
+                        err,
+                    )
             else:
+                self.ping_results[home.id] = "ok"
                 pinged = True
         return pinged
 

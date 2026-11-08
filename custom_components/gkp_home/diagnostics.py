@@ -51,6 +51,10 @@ async def async_get_config_entry_diagnostics(
             else None
         ),
         "last_update_success": coordinator.last_update_success,
+        "user_connected_pings": [
+            {"In": home_id, "result": result}
+            for home_id, result in coordinator.ping_results.items()
+        ],
         "homes": [asdict(home) for home in data.homes.values()],
         "radiators": [
             {

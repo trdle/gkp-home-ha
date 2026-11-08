@@ -21,7 +21,7 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 
 from custom_components.gkp_home.sensor import GkpHomeSensor
 
-from .conftest import FROZEN_NOW, KITCHEN, kitchen_content, register_cloud
+from .conftest import FROZEN_NOW, KITCHEN, office_content, register_cloud
 
 
 async def test_sensors(
@@ -91,13 +91,13 @@ async def test_sensors_with_missing_values(
     freezer: FrozenDateTimeFactory,
 ) -> None:
     freezer.move_to(FROZEN_NOW)
-    kitchen = kitchen_content(Dd="not a date", Sv="")
-    del kitchen["Pw"]
-    register_cloud(aioclient_mock, kitchen={"json": kitchen})
+    office = office_content(Dd="not a date", Sv="")
+    del office["Pw"]
+    register_cloud(aioclient_mock, office={"json": office})
     mock_config_entry.add_to_hass(hass)
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
-    assert hass.states.get("sensor.kitchen_rated_power").state == STATE_UNKNOWN
-    assert hass.states.get("sensor.kitchen_firmware").state == STATE_UNKNOWN
-    assert hass.states.get("sensor.kitchen_last_report").state == STATE_UNKNOWN
+    assert hass.states.get("sensor.office_rated_power").state == STATE_UNKNOWN
+    assert hass.states.get("sensor.office_firmware").state == STATE_UNKNOWN
+    assert hass.states.get("sensor.office_last_report").state == STATE_UNKNOWN
