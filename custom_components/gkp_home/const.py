@@ -29,8 +29,10 @@ SCOPE: Final = (
 # The API credentials the GKP Home app itself uses. Every install of the app
 # carries the same two values, so they are built in and users only need their
 # own GKP account. Leave them empty to make the config flow ask for them.
-APP_CLIENT_SECRET: Final = ""
-APP_SUBSCRIPTION_KEY: Final = ""
+APP_CLIENT_SECRET: Final = (
+    "C60C127E460193E1589DFB07BB7A60B41DFB24385B29C026EF17C8BA8EB46976"
+)
+APP_SUBSCRIPTION_KEY: Final = "09a191bb05314f66a578b7b5868e5249"
 
 USER_AGENT_API: Final = "okhttp/4.9.2"
 USER_AGENT_WEBVIEW: Final = (
