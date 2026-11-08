@@ -40,6 +40,8 @@ async def test_diagnostics(
 
     (home,) = diagnostics["homes"]
     assert home["id"] == REDACTED
+    assert home["admin_id"] == REDACTED
+    assert home["admin_matches_user"] is True
     assert home["name"] == "MyHouse"
     assert [room["name"] for room in home["rooms"].values()] == ["Kitchen", "Office"]
 

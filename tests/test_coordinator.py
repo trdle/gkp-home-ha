@@ -436,6 +436,46 @@ async def test_ping_results(
     assert "user-connected ping" not in caplog.text
 
 
+async def test_ping_uses_installation_admin_and_keeps_response(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to(FROZEN_NOW)
+    installations = [
+        {
+            "In": INSTALLATION_ID,
+            "Il": "MyHouse",
+            "A1": "ADMIN000009",
+            "rooms": [
+                {
+                    "Zn": "11111111-1111-1111-1111-111111111111",
+                    "Rn": "Kitchen",
+                    "devices": [{"Id_deviceId": KITCHEN, "Ty": "503038303733"}],
+                }
+            ],
+        }
+    ]
+    aioclient_mock.get(INSTALLATIONS_URL, json=installations)
+    aioclient_mock.put(
+        "https://gkp-apim-prd.azure-api.net/iotmanagement/v1/devices/userconnected",
+        json={"result": "queued"},
+    )
+    register_cloud(aioclient_mock)
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    ((_, _, body, _),) = calls(
+        aioclient_mock, "PUT", "/iotmanagement/v1/devices/userconnected"
+    )
+    assert body == {"A1": "ADMIN000009", "In": INSTALLATION_ID}
+    coordinator = mock_config_entry.runtime_data
+    assert coordinator.ping_results == {INSTALLATION_ID: "ok: {'result': 'queued'}"}
+    assert coordinator.data.homes[INSTALLATION_ID].admin_id == "ADMIN000009"
+
+
 async def setup_with_default_wake(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

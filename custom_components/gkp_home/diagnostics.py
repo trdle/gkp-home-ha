@@ -28,6 +28,7 @@ TO_REDACT = {
     "A1",
     "Zt",
     "home_id",
+    "admin_id",
 }
 
 
@@ -60,7 +61,15 @@ async def async_get_config_entry_diagnostics(
             {"In": home_id, "result": result}
             for home_id, result in coordinator.ping_results.items()
         ],
-        "homes": [asdict(home) for home in data.homes.values()],
+        "homes": [
+            {
+                **asdict(home),
+                # The user-connected ping is sent with the installation's admin id;
+                # a mismatch with the signed-in user would be worth knowing.
+                "admin_matches_user": home.admin_id in (None, coordinator.sub),
+            }
+            for home in data.homes.values()
+        ],
         "radiators": [
             {
                 "id": radiator.id,

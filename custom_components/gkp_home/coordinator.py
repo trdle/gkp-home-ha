@@ -230,6 +230,8 @@ class Home:
 
     id: str
     name: str
+    # The installation's admin (``A1``), used by the app for the user-connected ping.
+    admin_id: str | None = None
     rooms: dict[str, Room] = field(default_factory=dict)
 
 
@@ -265,7 +267,8 @@ def parse_installations(
         if not home_id:
             continue
         home_name = str(installation.get(KEY_INSTALLATION_NAME) or "GKP Home").strip()
-        home = Home(id=str(home_id), name=home_name)
+        admin_id = str(installation.get("A1") or "").strip() or None
+        home = Home(id=str(home_id), name=home_name, admin_id=admin_id)
         for index, room_data in enumerate(installation.get(KEY_ROOMS) or []):
             room_name = (
                 str(room_data.get(KEY_ROOM_NAME) or "").strip() or f"Room {index + 1}"
@@ -520,7 +523,9 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         pinged = False
         for home in homes.values():
             try:
-                await self.api.async_user_connected(self.sub, home.id)
+                response = await self.api.async_user_connected(
+                    home.admin_id or self.sub, home.id
+                )
             except InvalidAuth as err:
                 raise ConfigEntryAuthFailed(
                     "GKP Home rejected the saved session"
@@ -536,7 +541,10 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
                         err,
                     )
             else:
-                self.ping_results[home.id] = "ok"
+                # Keep whatever the cloud answers; it may say what the ping did.
+                self.ping_results[home.id] = (
+                    "ok" if response is None else f"ok: {str(response)[:200]}"
+                )
                 pinged = True
         return pinged
 
