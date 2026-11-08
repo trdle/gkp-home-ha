@@ -56,6 +56,9 @@ MIN_POLL_INTERVAL: Final = 30
 WRITE_REFRESH_DELAY: Final = 3.0
 # Maximum number of concurrent device content requests per refresh cycle.
 CONTENT_CONCURRENCY: Final = 4
+# Radiators only report fresh values while the cloud thinks a user is watching.
+# Each cycle sends that ping first and waits this long before reading them.
+USER_CONNECTED_SETTLE_DELAY: Final = 2.0
 
 # Radiator modes (Dm = demanded mode, Cm = current mode)
 MODE_OFF: Final = 0

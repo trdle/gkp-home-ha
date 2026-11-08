@@ -112,9 +112,10 @@ and controls **off / heat / auto** and the **target temperature**; the presets
   configuration directory and backups like any other secrets.
 - The diagnostics download redacts tokens, secrets, your email, your user id
   and all installation ids.
-- Like the GKP Home app, the integration tells the cloud once per poll that a
-  user is watching each installation (`userconnected`), which is what makes the
-  radiators report fresh values.
+- Like the GKP Home app, the integration tells the cloud at the start of every
+  poll that a user is watching each installation (`userconnected`), waits two
+  seconds, and only then reads the radiators. The radiators report fresh values
+  only while a user is connected, so without that ping they look frozen.
 
 ## Troubleshooting
 

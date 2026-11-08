@@ -53,6 +53,13 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Enable loading custom integrations in all tests."""
 
 
+@pytest.fixture(autouse=True)
+def no_settle_delay() -> Generator[None]:
+    """Do not wait for the radiators between the user-connected ping and the reads."""
+    with patch("custom_components.gkp_home.coordinator.USER_CONNECTED_SETTLE_DELAY", 0):
+        yield
+
+
 @pytest.fixture
 def fixed_random() -> Generator[None]:
     """Make the PKCE verifier, nonce and state deterministic."""

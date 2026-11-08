@@ -40,6 +40,7 @@ from .const import (
     MIN_POLL_INTERVAL,
     OFFLINE_AFTER,
     SETPOINT_KEYS,
+    USER_CONNECTED_SETTLE_DELAY,
     WRITE_REFRESH_DELAY,
 )
 from .util import (
@@ -311,6 +312,13 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
             raise UpdateFailed(f"Error fetching installations: {err}") from err
 
         homes, devices = parse_installations(installations)
+
+        # Like the app, tell the cloud a user is watching each installation
+        # before reading the radiators: they only report fresh values while a
+        # user is connected, so without this they look frozen.
+        if await self._async_ping_installations(homes) and devices:
+            await asyncio.sleep(USER_CONNECTED_SETTLE_DELAY)
+
         results = await asyncio.gather(
             *(self._async_fetch_content(device.id) for device in devices),
             return_exceptions=True,
@@ -373,16 +381,25 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         if devices and not radiators:
             raise UpdateFailed("Could not read the state of any radiator")
 
-        # The app tells the cloud a user is watching each installation; do the same.
-        for home in homes.values():
-            try:
-                await self.api.async_user_connected(self.sub, home.id)
-            except GkpHomeError as err:
-                _LOGGER.debug("User-connected ping failed for %s: %s", home.id, err)
-
         return GkpHomeData(
             homes=homes, radiators=radiators, raw_installations=installations
         )
+
+    async def _async_ping_installations(self, homes: dict[str, Home]) -> bool:
+        """Send the app-open ping for every installation; True if any succeeded."""
+        pinged = False
+        for home in homes.values():
+            try:
+                await self.api.async_user_connected(self.sub, home.id)
+            except InvalidAuth as err:
+                raise ConfigEntryAuthFailed(
+                    "GKP Home rejected the saved session"
+                ) from err
+            except GkpHomeError as err:
+                _LOGGER.debug("User-connected ping failed for %s: %s", home.id, err)
+            else:
+                pinged = True
+        return pinged
 
     async def _async_fetch_content(self, device_id: str) -> dict[str, Any]:
         """Fetch one radiator's content, limiting concurrency."""

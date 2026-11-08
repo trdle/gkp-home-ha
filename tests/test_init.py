@@ -49,13 +49,21 @@ async def test_setup_and_unload(
     assert data == "grant_type=refresh_token&refresh_token=refresh-token-0"
     assert init_integration.data[CONF_REFRESH_TOKEN] == "refresh-token-1"
 
-    # Installations, both radiators and the app-open ping, once per cycle.
+    # Installations, the app-open ping and then both radiators, once per cycle.
     assert (
         len(calls(mock_cloud, "GET", f"/businessmodule/v1/installations/admins/{SUB}"))
         == 1
     )
     pings = calls(mock_cloud, "PUT", "/iotmanagement/v1/devices/userconnected")
     assert [ping[2] for ping in pings] == [{"A1": SUB, "In": INSTALLATION_ID}]
+    # The radiators only report while a user is connected: ping before reading.
+    paths = [call[1].path for call in mock_cloud.mock_calls]
+    ping_index = paths.index("/iotmanagement/v1/devices/userconnected")
+    content_indexes = [
+        index for index, path in enumerate(paths) if "/v1/content/" in path
+    ]
+    assert content_indexes
+    assert ping_index < min(content_indexes)
 
     await hass.config_entries.async_unload(init_integration.entry_id)
     await hass.async_block_till_done()
@@ -117,6 +125,27 @@ async def test_setup_retries_when_cloud_unreachable(
     await hass.async_block_till_done()
 
     assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+
+
+async def test_setup_survives_failing_user_connected_ping(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to(FROZEN_NOW)
+    aioclient_mock.put(
+        "https://gkp-apim-prd.azure-api.net/iotmanagement/v1/devices/userconnected",
+        status=500,
+        text="Internal Server Error",
+    )
+    register_cloud(aioclient_mock)
+    mock_config_entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("climate.kitchen").state == "heat"
 
 
 async def test_setup_retries_when_no_radiator_is_readable(
