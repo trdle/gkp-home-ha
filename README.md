@@ -114,8 +114,10 @@ update only when you or the app change something.
 - The **heating** action comes from the radiator's heating flag. Radiators that
   do not report it fall back to a heuristic: heating while the room is more
   than 0.2 °C below the setpoint.
-- After every command the state is updated immediately and re-read from the
-  cloud about three seconds later.
+- After every command the state is updated immediately, and the radiator is
+  read again 3, 10 and 30 seconds later until it has confirmed the change, so
+  values that depend on the mode (the program's setpoint, for example) follow
+  within half a minute.
 
 ## Apple Home (HomeKit)
 

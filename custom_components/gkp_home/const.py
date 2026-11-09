@@ -58,8 +58,9 @@ MAX_WAKE_INTERVAL: Final = 60
 # Seconds to wait after the nudge before reading the radiator again.
 WAKE_SETTLE_DELAY: Final = 3.0
 
-# Delay between a write and the follow-up refresh that confirms it.
-WRITE_REFRESH_DELAY: Final = 3.0
+# Seconds after a write at which the radiator is read again, until it has
+# reported back (mode changes alter the setpoint only once applied).
+WRITE_REFRESH_DELAYS: Final = (3.0, 10.0, 30.0)
 # Maximum number of concurrent device content requests per refresh cycle.
 CONTENT_CONCURRENCY: Final = 4
 # Radiators only report fresh values while the cloud thinks a user is watching.

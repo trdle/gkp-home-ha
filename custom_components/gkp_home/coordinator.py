@@ -46,7 +46,7 @@ from .const import (
     SETPOINT_KEYS,
     USER_CONNECTED_SETTLE_DELAY,
     WAKE_SETTLE_DELAY,
-    WRITE_REFRESH_DELAY,
+    WRITE_REFRESH_DELAYS,
 )
 from .util import (
     device_time_age,
@@ -342,6 +342,11 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         self._warned_pings: set[str] = set()
         # When each radiator was last nudged to report.
         self._last_wake: dict[str, datetime] = {}
+        # Device metadata from the last cycle, for targeted re-reads.
+        self._metas: dict[str, _DeviceMeta] = {}
+        # Radiators written to that have not reported back yet, and the burst step.
+        self._pending_writes: dict[str, datetime] = {}
+        self._write_step = 0
 
     async def _async_update_data(self) -> GkpHomeData:
         """Fetch installations, then the content of every radiator."""
@@ -396,9 +401,8 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         if devices and not radiators:
             raise UpdateFailed("Could not read the state of any radiator")
 
-        await self._async_wake_silent_radiators(
-            radiators, {device.id: device for device in devices}
-        )
+        self._metas = {device.id: device for device in devices}
+        await self._async_wake_silent_radiators(radiators, self._metas)
 
         return GkpHomeData(
             homes=homes, radiators=radiators, raw_installations=installations
@@ -565,16 +569,59 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         self.async_update_listeners()
 
     @callback
-    def async_schedule_refresh(self, delay: float = WRITE_REFRESH_DELAY) -> None:
-        """Refresh shortly after a write so the real state replaces the local guess."""
+    def async_note_write(self, device_id: str) -> None:
+        """Re-read a radiator after a write until it has reported the new state.
+
+        A mode change alters the active setpoint only once the radiator applies
+        it, so the local guess is replaced by the real state as soon as the
+        radiator reports back, within the first half minute after the write.
+        """
+        self._pending_writes[device_id] = dt_util.utcnow()
+        self._write_step = 0
+        self._schedule_write_refresh()
+
+    @callback
+    def _schedule_write_refresh(self) -> None:
         self._cancel_pending_refresh()
+        if not self._pending_writes or self._write_step >= len(WRITE_REFRESH_DELAYS):
+            return
+        previous = WRITE_REFRESH_DELAYS[self._write_step - 1] if self._write_step else 0
         self._cancel_refresh = async_call_later(
-            self.hass, delay, self._async_delayed_refresh
+            self.hass,
+            WRITE_REFRESH_DELAYS[self._write_step] - previous,
+            self._async_write_refresh,
         )
 
-    async def _async_delayed_refresh(self, _now: datetime) -> None:
+    async def _async_write_refresh(self, _now: datetime) -> None:
         self._cancel_refresh = None
-        await self.async_request_refresh()
+        self._write_step += 1
+        await self._async_reread(list(self._pending_writes))
+        for device_id, written in list(self._pending_writes.items()):
+            radiator = self.data.radiators.get(device_id) if self.data else None
+            if radiator is None or (
+                radiator.last_report is not None
+                and radiator.last_report >= written - timedelta(seconds=10)
+            ):
+                del self._pending_writes[device_id]
+        self._schedule_write_refresh()
+
+    async def _async_reread(self, device_ids: list[str]) -> None:
+        """Read the given radiators again and publish the result."""
+        if self.data is None:
+            return
+        device_ids = [device_id for device_id in device_ids if device_id in self._metas]
+        results = await asyncio.gather(
+            *(self._async_fetch_content(device_id) for device_id in device_ids),
+            return_exceptions=True,
+        )
+        for device_id, result in zip(device_ids, results, strict=True):
+            if isinstance(result, BaseException):
+                _LOGGER.debug("Re-reading radiator %s failed: %s", device_id, result)
+                continue
+            self.data.radiators[device_id] = self._build_radiator(
+                self._metas[device_id], normalize_content(result), result, False
+            )
+        self.async_update_listeners()
 
     @callback
     def _cancel_pending_refresh(self) -> None:

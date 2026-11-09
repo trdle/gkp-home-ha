@@ -62,10 +62,11 @@ OFFICE_ENTITY = "climate.office"
 async def fire_write_refresh(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory
 ) -> None:
-    """Let the refresh scheduled after a write run."""
-    freezer.tick(timedelta(seconds=4))
-    async_fire_time_changed(hass)
-    await hass.async_block_till_done(wait_background_tasks=True)
+    """Run the whole re-read burst scheduled after a write (3, 10 and 30 s)."""
+    for seconds in (4, 8, 21):
+        freezer.tick(timedelta(seconds=seconds))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
 
 
 async def set_hvac_mode(hass: HomeAssistant, entity_id: str, mode: HVACMode) -> None:
@@ -182,10 +183,13 @@ async def test_set_hvac_mode(
         assert state.attributes[ATTR_HVAC_ACTION] == HVACAction.OFF
         assert state.attributes[ATTR_PRESET_MODE] is None
 
-    # A refresh is requested about 3 s after the write and restores the cloud state.
+    # The radiator is read again 3, 10 and 30 s after the write (it never
+    # reports back in this test) and the cloud state replaces the local guess.
     assert content_reads(mock_cloud, KITCHEN) == reads_before
+    office_reads = content_reads(mock_cloud, OFFICE)
     await fire_write_refresh(hass, freezer)
-    assert content_reads(mock_cloud, KITCHEN) == reads_before + 1
+    assert content_reads(mock_cloud, KITCHEN) == reads_before + 3
+    assert content_reads(mock_cloud, OFFICE) == office_reads  # only the written one
     assert hass.states.get(KITCHEN_ENTITY).state == HVACMode.HEAT
 
 
@@ -449,3 +453,38 @@ async def test_unknown_mode(
     assert office_state.state == HVACMode.HEAT
     assert office_state.attributes[ATTR_PRESET_MODE] is None
     assert office_state.attributes[ATTR_TEMPERATURE] == 21.0  # Sp
+
+
+async def test_write_burst_stops_once_the_radiator_reports(
+    hass: HomeAssistant,
+    init_integration: MockConfigEntry,
+    mock_cloud: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    await set_hvac_mode(hass, KITCHEN_ENTITY, HVACMode.AUTO)
+    assert hass.states.get(KITCHEN_ENTITY).state == HVACMode.AUTO
+    assert hass.states.get(KITCHEN_ENTITY).attributes[ATTR_TEMPERATURE] == 8.0  # guess
+
+    # The radiator applies the program and reports a new setpoint right after.
+    reported = kitchen_content(
+        Dm={"timestamp": 1791831601, "value": 2},
+        Cm={"timestamp": 1791831601, "value": 2},
+        Sp={"timestamp": 1791831601, "value": 590},
+        Dd={"timestamp": 1791831601, "value": "12/10/2026 21:00:01"},
+    )
+    mock_cloud.clear_requests()
+    register_cloud(mock_cloud, kitchen={"json": reported})
+
+    freezer.tick(timedelta(seconds=4))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    state = hass.states.get(KITCHEN_ENTITY)
+    assert state.state == HVACMode.AUTO
+    assert state.attributes[ATTR_TEMPERATURE] == 15.0  # the program's setpoint
+    assert content_reads(mock_cloud, KITCHEN) == 1
+
+    # It reported after the write, so the burst ends here.
+    freezer.tick(timedelta(seconds=8))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert content_reads(mock_cloud, KITCHEN) == 1

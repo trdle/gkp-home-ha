@@ -217,7 +217,7 @@ class GkpHomeClimate(GkpHomeEntity, ClimateEntity):
                 KEY_SETPOINT: value,
             },
         )
-        self.coordinator.async_schedule_refresh()
+        self.coordinator.async_note_write(self.device_id)
 
     async def _async_write_mode(
         self, mode: int, boost_minutes: int | None = None
@@ -235,7 +235,7 @@ class GkpHomeClimate(GkpHomeEntity, ClimateEntity):
         if boost_minutes is not None:
             changes[KEY_BOOST_MINUTES] = boost_minutes
         self.coordinator.async_update_radiator(self.device_id, **changes)
-        self.coordinator.async_schedule_refresh()
+        self.coordinator.async_note_write(self.device_id)
 
 
 def _write_error(err: GkpHomeError) -> HomeAssistantError:
