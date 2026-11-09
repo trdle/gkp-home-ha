@@ -44,6 +44,7 @@ async def test_diagnostics(
     assert home["admin_matches_user"] is True
     assert home["name"] == "MyHouse"
     assert [room["name"] for room in home["rooms"].values()] == ["Kitchen", "Office"]
+    assert all(room["radiator_ids"] == REDACTED for room in home["rooms"].values())
 
     kitchen, office = diagnostics["radiators"]
     assert kitchen["id"] == REDACTED
@@ -67,7 +68,8 @@ async def test_diagnostics(
     assert raw["Il"] == "MyHouse"
     assert raw["rooms"][0]["Zt"] == REDACTED
     assert raw["rooms"][0]["Rn"] == "Kitchen"
-    assert raw["rooms"][0]["devices"][0]["Id_deviceId"] == "AABBCCDDEE01"
+    assert raw["rooms"][0]["devices"][0]["Id_deviceId"] == REDACTED
+    assert raw["rooms"][0]["devices"][0]["Ty"] == "503038303733"
 
     # The secrets never appear anywhere in the output.
     text = str(diagnostics)

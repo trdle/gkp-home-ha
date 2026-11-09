@@ -569,7 +569,9 @@ async def test_refresh_without_refresh_token(session: aiohttp.ClientSession) -> 
     [
         (400, '{"error":"invalid_grant"}'),
         (401, '{"error":"invalid_client"}'),
-        (400, "not json"),
+        (400, '{"error":"unauthorized_client"}'),
+        (401, '{"statusCode":401,"message":"Access denied due to missing key"}'),
+        (401, ""),
     ],
 )
 async def test_refresh_rejected(
@@ -589,6 +591,28 @@ async def test_refresh_server_error(
     with pytest.raises(ApiError) as excinfo:
         await api.async_refresh_token()
     assert excinfo.value.status == 502
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        (403, '{"statusCode":403,"message":"Out of call volume quota"}'),
+        (400, '{"error":"invalid_request"}'),
+        (400, '{"error":"unsupported_grant_type"}'),
+        (400, "not json"),
+        (429, ""),
+    ],
+)
+async def test_refresh_errors_that_are_not_credential_problems(
+    api: GkpHomeApi, mocker: AiohttpClientMocker, status: int, body: str
+) -> None:
+    """Transient or client-side token errors must not trigger re-authentication."""
+    mocker.post(TOKEN_URL, status=status, text=body)
+
+    with pytest.raises(ApiError) as excinfo:
+        await api.async_refresh_token()
+    assert excinfo.value.status == status
+    assert api.refresh_token == "old"
 
 
 async def test_refresh_connection_error(

@@ -91,6 +91,12 @@ _ERROR_CLASS_MARKERS = (
     "text-danger",
 )
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
+# OAuth 2.0 token endpoint errors (RFC 6749 section 5.2) that mean the stored
+# refresh token or the client credentials are bad; anything else is transient
+# or a client bug and must not send the user through re-authentication.
+_CREDENTIAL_TOKEN_ERRORS = frozenset(
+    {"invalid_grant", "invalid_client", "unauthorized_client"}
+)
 
 
 class GkpHomeError(Exception):
@@ -566,12 +572,14 @@ class GkpHomeApi:
                 f"Connection error while requesting tokens: {err}"
             ) from err
 
-        if status in (400, 401, 403):
-            error = _json_or_empty(text).get("error", "")
-            raise InvalidAuth(
-                f"Token request rejected ({status}): {error or text[:100]}"
-            )
         if status >= 400:
+            error = str(_json_or_empty(text).get("error") or "")
+            # A bare 401 comes from the gateway in front of the identity server
+            # (for example a rejected subscription key) and needs new credentials.
+            if error in _CREDENTIAL_TOKEN_ERRORS or (status == 401 and not error):
+                raise InvalidAuth(
+                    f"Token request rejected ({status}): {error or text[:100]}"
+                )
             raise ApiError(status, text, f"Token request failed with HTTP {status}")
 
         payload = _json_or_empty(text)

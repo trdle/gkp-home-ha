@@ -190,6 +190,8 @@ async def test_set_hvac_mode(
     await fire_write_refresh(hass, freezer)
     assert content_reads(mock_cloud, KITCHEN) == reads_before + 3
     assert content_reads(mock_cloud, OFFICE) == office_reads  # only the written one
+    # The burst is over: nothing is left pending for later bursts.
+    assert init_integration.runtime_data._pending_writes == {}
     assert hass.states.get(KITCHEN_ENTITY).state == HVACMode.HEAT
 
 

@@ -48,6 +48,9 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Updates come from the coordinator; this only serialises commands to the cloud.
+PARALLEL_UPDATES = 1
+
 PRESET_TO_MODE: dict[str, int] = {
     PRESET_COMFORT: MODE_COMFORT,
     PRESET_ECO: MODE_ECO,

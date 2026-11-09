@@ -29,6 +29,9 @@ TO_REDACT = {
     "Zt",
     "home_id",
     "admin_id",
+    # Radiator ids are their WiFi MAC addresses.
+    "Id_deviceId",
+    "radiator_ids",
 }
 
 

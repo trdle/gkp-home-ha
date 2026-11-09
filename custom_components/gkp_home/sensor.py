@@ -24,6 +24,9 @@ from .entity import GkpHomeEntity
 if TYPE_CHECKING:
     from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
+# The coordinator centralises all updates; these entities never poll themselves.
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True, kw_only=True)
 class GkpHomeSensorDescription(SensorEntityDescription):

@@ -327,7 +327,9 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
             hass,
             _LOGGER,
             config_entry=entry,
-            name=f"{DOMAIN} {entry.title}",
+            # Not the entry title: that is the account email and would end up in
+            # every coordinator log line.
+            name=DOMAIN,
             update_interval=poll_interval(entry),
         )
         self.api = api
@@ -583,7 +585,11 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
     @callback
     def _schedule_write_refresh(self) -> None:
         self._cancel_pending_refresh()
-        if not self._pending_writes or self._write_step >= len(WRITE_REFRESH_DELAYS):
+        if self._write_step >= len(WRITE_REFRESH_DELAYS):
+            # Burst over: radiators that never reported back are left to the
+            # regular poll and the wake nudge instead of piling up here.
+            self._pending_writes.clear()
+        if not self._pending_writes:
             return
         previous = WRITE_REFRESH_DELAYS[self._write_step - 1] if self._write_step else 0
         self._cancel_refresh = async_call_later(
