@@ -522,6 +522,25 @@ async def test_wake_silent_radiator(
     assert content_reads(mock_cloud, KITCHEN) == 4  # three polls plus one re-read
 
 
+async def test_woken_radiator_is_reread_until_it_reports(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_cloud: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    await setup_with_default_wake(hass, mock_config_entry, freezer)
+    assert content_reads(mock_cloud, OFFICE) == 2  # poll + first re-read
+
+    # The office answers the nudge slowly: it is read again 3, 10 and 30 s later.
+    for seconds, reads in ((4, 3), (8, 4), (21, 5)):
+        freezer.tick(timedelta(seconds=seconds))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done(wait_background_tasks=True)
+        assert content_reads(mock_cloud, OFFICE) == reads
+    assert content_reads(mock_cloud, KITCHEN) == 1
+    assert mock_config_entry.runtime_data._pending_writes == {}
+
+
 async def test_wake_disabled(
     hass: HomeAssistant,
     init_integration: MockConfigEntry,

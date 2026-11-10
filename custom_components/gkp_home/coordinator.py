@@ -524,6 +524,16 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
                 metas[radiator.id], normalize_content(result), result, False
             )
 
+        # Radiators answer a nudge slowly (the app needs several refreshes too):
+        # keep re-reading the ones that have not reported yet.
+        for radiator in woken:
+            report = radiators[radiator.id].last_report
+            if report is None or report < now - timedelta(seconds=10):
+                self._pending_writes[radiator.id] = now
+        if self._pending_writes:
+            self._write_step = 0
+            self._schedule_write_refresh()
+
     async def _async_ping_installations(self, homes: dict[str, Home]) -> bool:
         """Send the app-open ping for every installation; True if any succeeded."""
         pinged = False
