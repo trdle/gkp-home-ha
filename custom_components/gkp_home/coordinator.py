@@ -360,11 +360,12 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
             raise UpdateFailed(f"Error fetching installations: {err}") from err
 
         homes, devices = parse_installations(installations)
+        self._metas = {device.id: device for device in devices}
 
-        # Like the app, tell the cloud a user is watching each installation
-        # before reading the radiators: they only report fresh values while a
-        # user is connected, so without this they look frozen.
-        if await self._async_ping_installations(homes) and devices:
+        # Like the app, tell the cloud a user is watching each radiator before
+        # reading it: a radiator reports fresh values only after this ping, so
+        # without it the values look frozen.
+        if await self._async_ping_devices(homes, devices) and devices:
             await asyncio.sleep(USER_CONNECTED_SETTLE_DELAY)
 
         results = await asyncio.gather(
@@ -403,7 +404,6 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
         if devices and not radiators:
             raise UpdateFailed("Could not read the state of any radiator")
 
-        self._metas = {device.id: device for device in devices}
         await self._async_wake_silent_radiators(radiators, self._metas)
 
         return GkpHomeData(
@@ -534,33 +534,44 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
             self._write_step = 0
             self._schedule_write_refresh()
 
-    async def _async_ping_installations(self, homes: dict[str, Home]) -> bool:
-        """Send the app-open ping for every installation; True if any succeeded."""
+    async def _async_ping_devices(
+        self, homes: dict[str, Home], devices: list[_DeviceMeta]
+    ) -> bool:
+        """Send the app-open ping for every radiator; True if any succeeded.
+
+        The app sends this per radiator with the installation admin (``A1``),
+        the installation id (``In``) and the radiator id (``S1``).
+        """
+        self.ping_results = {}
         pinged = False
-        for home in homes.values():
+        for device in devices:
+            home = homes.get(device.home_id)
+            a1 = (home.admin_id if home else None) or self.sub
             try:
                 response = await self.api.async_user_connected(
-                    home.admin_id or self.sub, home.id
+                    a1, device.home_id, device.id
                 )
             except InvalidAuth as err:
                 raise ConfigEntryAuthFailed(
                     "GKP Home rejected the saved session"
                 ) from err
             except GkpHomeError as err:
-                self.ping_results[home.id] = f"failed: {err}"
-                if home.id not in self._warned_pings:
-                    self._warned_pings.add(home.id)
+                self.ping_results[device.id] = f"failed: {err}"
+                if device.id not in self._warned_pings:
+                    self._warned_pings.add(device.id)
                     _LOGGER.warning(
-                        "The user-connected ping for installation %s failed (%s);"
-                        " the radiators may not report fresh values",
-                        home.name,
+                        "The user-connected ping for radiator %s (%s) failed (%s);"
+                        " it may not report fresh values",
+                        device.id,
+                        device.room_name,
                         err,
                     )
             else:
                 # Keep whatever the cloud answers; it may say what the ping did.
-                self.ping_results[home.id] = (
+                self.ping_results[device.id] = (
                     "ok" if response is None else f"ok: {str(response)[:200]}"
                 )
+                self._warned_pings.discard(device.id)
                 pinged = True
         return pinged
 
@@ -648,6 +659,7 @@ class GkpHomeCoordinator(DataUpdateCoordinator[GkpHomeData]):
     async def async_shutdown(self) -> None:
         """Cancel pending work when the entry is unloaded."""
         self._cancel_pending_refresh()
+        self._pending_writes.clear()
         await super().async_shutdown()
 
 

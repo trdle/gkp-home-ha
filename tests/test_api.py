@@ -835,7 +835,7 @@ async def test_write_bodies(api: GkpHomeApi, mocker: AiohttpClientMocker) -> Non
     await api.async_set_setpoint(DEVICE_ID, MODE_ECO, 590)
     await api.async_set_setpoint(DEVICE_ID, MODE_COMFORT, 680)
     await api.async_set_installation_mode(INSTALLATION_ID, SUB, 3)
-    await api.async_user_connected(SUB, INSTALLATION_ID)
+    await api.async_user_connected(SUB, INSTALLATION_ID, DEVICE_ID)
 
     def envelope(data: list[dict[str, Any]]) -> dict[str, Any]:
         return {
@@ -893,7 +893,7 @@ async def test_write_bodies(api: GkpHomeApi, mocker: AiohttpClientMocker) -> Non
     ((_, _, connected, _),) = calls_for(
         mocker, "PUT", "/iotmanagement/v1/devices/userconnected"
     )
-    assert connected == {"A1": SUB, "In": INSTALLATION_ID}
+    assert connected == {"A1": SUB, "In": INSTALLATION_ID, "S1": DEVICE_ID}
 
 
 async def test_set_setpoint_rejects_modes_without_setpoint(api: GkpHomeApi) -> None:

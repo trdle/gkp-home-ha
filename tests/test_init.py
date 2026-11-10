@@ -54,8 +54,12 @@ async def test_setup_and_unload(
         len(calls(mock_cloud, "GET", f"/businessmodule/v1/installations/admins/{SUB}"))
         == 1
     )
+    # One ping per radiator, each carrying that radiator's id as S1.
     pings = calls(mock_cloud, "PUT", "/iotmanagement/v1/devices/userconnected")
-    assert [ping[2] for ping in pings] == [{"A1": SUB, "In": INSTALLATION_ID}]
+    assert [ping[2] for ping in pings] == [
+        {"A1": SUB, "In": INSTALLATION_ID, "S1": "AABBCCDDEE01"},
+        {"A1": SUB, "In": INSTALLATION_ID, "S1": "AABBCCDDEE02"},
+    ]
     # The radiators only report while a user is connected: ping before reading.
     paths = [call[1].path for call in mock_cloud.mock_calls]
     ping_index = paths.index("/iotmanagement/v1/devices/userconnected")

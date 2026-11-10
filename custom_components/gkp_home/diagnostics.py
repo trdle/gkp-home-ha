@@ -32,6 +32,7 @@ TO_REDACT = {
     # Radiator ids are their WiFi MAC addresses.
     "Id_deviceId",
     "radiator_ids",
+    "S1",
 }
 
 
@@ -61,8 +62,8 @@ async def async_get_config_entry_diagnostics(
         ),
         "last_update_success": coordinator.last_update_success,
         "user_connected_pings": [
-            {"In": home_id, "result": result}
-            for home_id, result in coordinator.ping_results.items()
+            {"S1": device_id, "result": result}
+            for device_id, result in coordinator.ping_results.items()
         ],
         "homes": [
             {

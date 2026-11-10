@@ -738,10 +738,19 @@ class GkpHomeApi:
         }
         return await self._async_request("PUT", INSTALLATION_CONTROL_PATH, body)
 
-    async def async_user_connected(self, sub: str, installation_id: str) -> Any:
-        """Tell the cloud a user is looking at the installation (app open ping)."""
+    async def async_user_connected(
+        self, a1: str, installation_id: str, device_id: str
+    ) -> Any:
+        """Tell the cloud a user is looking at a radiator (the app's open ping).
+
+        The GKP Home app sends this per radiator, with the installation admin
+        (``A1``), the installation id (``In``) and the radiator id (``S1``);
+        the radiator starts reporting fresh values in response.
+        """
         return await self._async_request(
-            "PUT", USER_CONNECTED_PATH, {"A1": sub, "In": installation_id}
+            "PUT",
+            USER_CONNECTED_PATH,
+            {"A1": a1, "In": installation_id, "S1": device_id},
         )
 
 

@@ -58,7 +58,10 @@ async def test_diagnostics(
     assert kitchen["raw_content"]["At"]["value"] == 700
     assert office["online"] is False
     assert office["last_report"] == "2026-10-12T19:30:00+02:00"  # device clock
-    assert diagnostics["user_connected_pings"] == [{"In": REDACTED, "result": "ok"}]
+    assert diagnostics["user_connected_pings"] == [
+        {"S1": REDACTED, "result": "ok"},
+        {"S1": REDACTED, "result": "ok"},
+    ]
 
     (raw,) = diagnostics["raw_installations"]
     assert raw["id"] == REDACTED

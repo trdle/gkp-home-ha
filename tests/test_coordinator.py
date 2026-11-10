@@ -100,7 +100,8 @@ async def test_polling(
     await poll(hass, freezer)
     assert content_reads(mock_cloud, KITCHEN) == 2
     assert content_reads(mock_cloud, OFFICE) == 2
-    assert len(calls(mock_cloud, "PUT", "/iotmanagement/v1/devices/userconnected")) == 2
+    # One user-connected ping per radiator, per poll: 2 radiators over 2 cycles.
+    assert len(calls(mock_cloud, "PUT", "/iotmanagement/v1/devices/userconnected")) == 4
     # The access token is reused while it is valid.
     assert len(calls(mock_cloud, "POST", "/connect/token")) == 1
 
@@ -424,15 +425,16 @@ async def test_ping_results(
     await hass.async_block_till_done()
 
     coordinator = mock_config_entry.runtime_data
-    assert coordinator.ping_results[INSTALLATION_ID].startswith("failed: HTTP 500")
-    assert "user-connected ping for installation MyHouse failed" in caplog.text
+    assert coordinator.ping_results[KITCHEN].startswith("failed: HTTP 500")
+    assert coordinator.ping_results[OFFICE].startswith("failed: HTTP 500")
+    assert "user-connected ping for radiator" in caplog.text
 
     # Once the ping works again the result reflects it, without more warnings.
     caplog.clear()
     aioclient_mock.clear_requests()
     register_cloud(aioclient_mock)
     await poll(hass, freezer)
-    assert coordinator.ping_results == {INSTALLATION_ID: "ok"}
+    assert coordinator.ping_results == {KITCHEN: "ok", OFFICE: "ok"}
     assert "user-connected ping" not in caplog.text
 
 
@@ -470,9 +472,9 @@ async def test_ping_uses_installation_admin_and_keeps_response(
     ((_, _, body, _),) = calls(
         aioclient_mock, "PUT", "/iotmanagement/v1/devices/userconnected"
     )
-    assert body == {"A1": "ADMIN000009", "In": INSTALLATION_ID}
+    assert body == {"A1": "ADMIN000009", "In": INSTALLATION_ID, "S1": KITCHEN}
     coordinator = mock_config_entry.runtime_data
-    assert coordinator.ping_results == {INSTALLATION_ID: "ok: {'result': 'queued'}"}
+    assert coordinator.ping_results == {KITCHEN: "ok: {'result': 'queued'}"}
     assert coordinator.data.homes[INSTALLATION_ID].admin_id == "ADMIN000009"
 
 
